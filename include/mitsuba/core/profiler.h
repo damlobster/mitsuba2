@@ -40,6 +40,8 @@ enum class ProfilerPhase : int {
     TextureSample,              /* Texture::sample() */
     TextureEvaluate,            /* Texture::eval() and Texture::pdf() */
 
+    RayIntersectSDF,
+
     ProfilerPhaseCount
 };
 
@@ -67,7 +69,8 @@ constexpr const char
         "Endpoint::sample_ray()",
         "Endpoint::sample_direction()",
         "Texture::sample()",
-        "Texture::eval()"
+        "Texture::eval()",
+        "SDF::RayIntersect()"
     };
 
 

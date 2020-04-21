@@ -14,6 +14,8 @@ MTS_VARIANT std::pair<typename SDF<Float, Spectrum>::Mask, Float>
 SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float * /*cache*/,
                                          Mask active) const {
 
+    ScopedPhase sp(ProfilerPhase::RayIntersectSDF);
+
     ScalarFloat epsilon = math::RayEpsilon<Float> / 10;
     Float omega = 1;
     Float t = ray.mint;
