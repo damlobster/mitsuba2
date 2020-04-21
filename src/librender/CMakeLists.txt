@@ -62,6 +62,9 @@ add_library(mitsuba-render-obj OBJECT
   texture.cpp      ${INC_DIR}/texture.h
   spiral.cpp       ${INC_DIR}/spiral.h
   srgb.cpp         ${INC_DIR}/srgb.h
+
+  sdf.cpp          ${INC_DIR}/sdf.h
+
   ${LIBRENDER_EXTRA_SRC}
 )
 
