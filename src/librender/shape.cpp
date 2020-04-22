@@ -59,8 +59,8 @@ MTS_VARIANT Shape<Float, Spectrum>::Shape(const Properties &props) : m_id(props.
             if (m_sensor)
                 Throw("Only a single Sensor child object can be specified per shape.");
             m_sensor = sensor;
-        } else {
-            Throw("Tried to add an unsupported object of type \"%s\"", kv.second);
+        //} else {
+        //    Throw("Tried to add an unsupported object of type \"%s\"", kv.second);
         }
     }
 
