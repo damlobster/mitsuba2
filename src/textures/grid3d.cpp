@@ -319,7 +319,7 @@ public:
             result *= scale;
 
         if constexpr (with_gradient) {
-            if constexpr (!is_monochromatic_v<Spectrum>)
+            if constexpr (!(is_monochromatic_v<Spectrum> || Channels == 1))
                 NotImplementedError("eval_gradient with multichannel GridVolume texture");
 
             Float gx0 = fmadd(d001 - d000, rf.y(), (d011 - d010) * f.y()).x(),

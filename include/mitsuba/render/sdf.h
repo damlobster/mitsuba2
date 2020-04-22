@@ -35,7 +35,7 @@ public:
     //! @{ \name Shape interface implementation
     // =============================================================
 
-    virtual Float distance(const Point3f &p, Mask active) const = 0;
+    virtual Float distance(const Interaction3f &inter, Mask active) const = 0;
 
     virtual std::pair<Mask, Float>
     ray_intersect(const Ray3f &ray, Float * /*cache*/, Mask active) const override;
@@ -45,7 +45,9 @@ public:
                                           SurfaceInteraction3f &si,
                                           Mask active = true) const override;
 
-    virtual ScalarBoundingBox3f bbox() const override = 0;
+    virtual ScalarBoundingBox3f bbox() const override {
+        return m_bbox;
+    };
 
     ScalarSize primitive_count() const override { return 1; }
 

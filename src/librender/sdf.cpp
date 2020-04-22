@@ -14,20 +14,30 @@ MTS_VARIANT std::pair<typename SDF<Float, Spectrum>::Mask, Float>
 SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float * /*cache*/,
                                          Mask active) const {
 
+    // Taken from Keinert, B. et al. (2014). Enhanced Sphere Tracing.
+
     ScopedPhase sp(ProfilerPhase::RayIntersectSDF);
 
+    auto [valid, mint, maxt] = bbox().ray_intersect(ray);
+
+    Mask originInside = bbox().contains(ray.o);
+    masked(mint, originInside) = ray.mint;
+    masked(mint, !originInside) += 10*math::RayEpsilon<Float>;
+
+    active &= valid && mint <= ray.maxt && maxt > ray.mint;
+
+    Interaction3f it(mint, ray.time, ray.wavelengths, ray(mint));
     ScalarFloat epsilon = math::RayEpsilon<Float> / 10;
     Float omega = 1;
-    Float t = ray.mint;
     Float candidate_error = math::Infinity<Float>;
-    Float candidate_t = ray.mint;
+    Float candidate_t = mint;
     Float previousRadius = 0;
     Float stepLength = 0;
-    Float functionSign = sign(distance(ray(t), active));
+    Float functionSign = sign(distance(it, active));
 
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < 50; ++i) {
 
-        Float signedRadius = functionSign * distance(ray(t), active);
+        Float signedRadius = functionSign * distance(it, active);
         Float radius = abs(signedRadius);
 
         Mask sorFail = omega > 1 && (radius + previousRadius) < stepLength;
@@ -35,19 +45,21 @@ SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float * /*cache*/,
         masked(omega, active && sorFail) = 1;
 
         previousRadius = radius;
-        Float error = radius / t;
+        Float error = radius / it.t;
 
         Mask updatable = active && !sorFail && error < candidate_error;
-        masked(candidate_t, updatable) = t;
+        masked(candidate_t, updatable) = it.t;
         masked(candidate_error, updatable) = error;
 
-        active &= sorFail || error > epsilon && t < ray.maxt;
-        if (all_or<false>(!active))
+        active &= sorFail || error > epsilon && it.t < maxt;
+
+        if (none_or<false>(active))
             break;
-        masked(t, active) += stepLength;
+        masked(it.t, active) += stepLength;
+        masked(it.p, active) = ray(it.t);
     }
 
-    Mask missed = (t > ray.maxt || candidate_error > epsilon); // && !forceHit;
+    Mask missed = (it.t > ray.maxt || candidate_error > epsilon); // && !forceHit;
     return { !missed, select(!missed, candidate_t, math::Infinity<Float>) };
 }
 

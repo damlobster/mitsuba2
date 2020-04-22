@@ -50,8 +50,8 @@ public:
 
     ScalarBoundingBox3f bbox() const override {
         ScalarBoundingBox3f bbox;
-        bbox.min = m_center - m_radius - 100*math::RayEpsilon<Float>;
-        bbox.max = m_center + m_radius + 100*math::RayEpsilon<Float>;
+        bbox.min = m_center - m_radius - 2*math::RayEpsilon<Float>;
+        bbox.max = m_center + m_radius + 2*math::RayEpsilon<Float>;
         return bbox;
     }
 
@@ -59,10 +59,10 @@ public:
     //! @{ \name Ray tracing routines
     // =============================================================
 
-    Float distance(const Point3f &p, Mask active) const override {
+    Float distance(const Interaction3f &it, Mask active) const override {
         MTS_MASK_ARGUMENT(active);
 
-        return select(active, norm(p - m_center) - m_radius, math::Infinity<Float>);
+        return select(active, norm(it.p - m_center) - m_radius, math::Infinity<Float>);
     }
 
     void fill_surface_interaction(const Ray3f &ray, const Float * /*cache*/,
@@ -72,6 +72,7 @@ public:
         SurfaceInteraction3f si(si_out);
 
         si.p = ray(si.t);
+        si.p = fmadd(ray.d, distance(si, active), si.p);
         si.sh_frame.n = normalize(si.p - m_center);
         auto [dp_du, dp_dv] = coordinate_system(si.sh_frame.n);
         si.dp_du = dp_du;
@@ -86,8 +87,6 @@ public:
         si.wi = select(active, si.to_local(-ray.d), -ray.d);
 
         si_out[active] = si;
-
-        //std::cout << "filled si=" << si_out << std::endl;
     }
 
     //! @}
