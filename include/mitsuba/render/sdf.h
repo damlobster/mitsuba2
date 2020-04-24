@@ -66,6 +66,7 @@ protected:
     std::string m_name;
     ScalarBoundingBox3f m_bbox;
     ScalarTransform4f m_to_world;
+    ScalarInt32 m_sphere_tracing_steps;
 };
 
 MTS_EXTERN_CLASS_RENDER(SDF)

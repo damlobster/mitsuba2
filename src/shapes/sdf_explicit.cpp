@@ -9,10 +9,6 @@
 
 #include <mitsuba/render/sdf.h>
 
-#if defined(MTS_ENABLE_EMBREE)
-    #include <embree3/rtcore.h>
-#endif
-
 NAMESPACE_BEGIN(mitsuba)
 
 template <typename Float, typename Spectrum>

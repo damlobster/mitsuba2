@@ -6,7 +6,11 @@
 
 NAMESPACE_BEGIN(mitsuba)
 
-MTS_VARIANT SDF<Float, Spectrum>::SDF(const Properties &props) : Base(props) {}
+MTS_VARIANT SDF<Float, Spectrum>::SDF(const Properties &props) : Base(props) {
+    m_sphere_tracing_steps = props.int_("sphere_tracing_steps", 50);
+    if(m_sphere_tracing_steps<=0)
+        Throw("sphere_tracing_steps should be positive");
+}
 
 MTS_VARIANT SDF<Float, Spectrum>::~SDF() {}
 
@@ -26,6 +30,9 @@ SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float * /*cache*/,
 
     active &= valid && mint <= ray.maxt && maxt > ray.mint;
 
+    if(none(active))
+        return { active, math::Infinity<Float> };
+
     Interaction3f it(mint, ray.time, ray.wavelengths, ray(mint));
     ScalarFloat epsilon = math::RayEpsilon<Float> / 10;
     Float omega = 1;
@@ -35,7 +42,7 @@ SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float * /*cache*/,
     Float stepLength = 0;
     Float functionSign = sign(distance(it, active));
 
-    for (int i = 0; i < 50; ++i) {
+    for (int i = 0; i < m_sphere_tracing_steps; ++i) {
 
         Float signedRadius = functionSign * distance(it, active);
         Float radius = abs(signedRadius);
@@ -55,6 +62,7 @@ SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float * /*cache*/,
 
         if (none_or<false>(active))
             break;
+
         masked(it.t, active) += stepLength;
         masked(it.p, active) = ray(it.t);
     }
