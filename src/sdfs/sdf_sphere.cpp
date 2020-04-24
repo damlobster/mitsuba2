@@ -19,8 +19,6 @@ public:
     MTS_IMPORT_BASE(SDF)
     MTS_IMPORT_TYPES()
 
-    using typename Base::ScalarSize;
-
     SphereSDF(const Properties &props) : Base(props) {
         m_object_to_world =
             ScalarTransform4f::translate(ScalarVector3f(props.point3f("center", ScalarPoint3f(0.f))));
@@ -122,6 +120,6 @@ private:
     bool m_flip_normals;
 };
 
-MTS_IMPLEMENT_CLASS_VARIANT(SphereSDF, Shape)
+MTS_IMPLEMENT_CLASS_VARIANT(SphereSDF, SDF)
 MTS_EXPORT_PLUGIN(SphereSDF, "Sphere SDF intersection primitive");
 NAMESPACE_END(mitsuba)

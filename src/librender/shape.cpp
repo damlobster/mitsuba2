@@ -4,6 +4,7 @@
 #include <mitsuba/render/bsdf.h>
 #include <mitsuba/render/sensor.h>
 #include <mitsuba/render/medium.h>
+#include <mitsuba/render/sdf.h>
 #include <mitsuba/core/plugin.h>
 
 #if defined(MTS_ENABLE_EMBREE)
@@ -36,6 +37,7 @@ MTS_VARIANT Shape<Float, Spectrum>::Shape(const Properties &props) : m_id(props.
         Sensor *sensor = dynamic_cast<Sensor *>(kv.second.get());
         BSDF *bsdf = dynamic_cast<BSDF *>(kv.second.get());
         Medium *medium = dynamic_cast<Medium *>(kv.second.get());
+        //SDF *sdf = dynamic_cast<SDF *>(kv.second.get());
 
         if (emitter) {
             if (m_emitter)
@@ -59,9 +61,14 @@ MTS_VARIANT Shape<Float, Spectrum>::Shape(const Properties &props) : m_id(props.
             if (m_sensor)
                 Throw("Only a single Sensor child object can be specified per shape.");
             m_sensor = sensor;
-        //} else {
-        //    Throw("Tried to add an unsupported object of type \"%s\"", kv.second);
-        }
+        } /*else if (sdf) {
+            Log(Debug, "Added SDF: %s", sdf->to_string());
+            if (m_sdf)
+                Throw("Only a single Sensor child object can be specified per shape.");
+            m_sdf = sdf;
+        } else {
+            Throw("Tried to add an unsupported object of type \"%s\"", kv.second);
+        }*/
     }
 
     // Create a default diffuse BSDF if needed.

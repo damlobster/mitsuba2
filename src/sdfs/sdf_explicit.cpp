@@ -14,7 +14,7 @@ NAMESPACE_BEGIN(mitsuba)
 template <typename Float, typename Spectrum>
 class ExplicitSDF final : public SDF<Float, Spectrum> {
 public:
-    MTS_IMPORT_BASE(SDF, m_bbox)
+    MTS_IMPORT_BASE(SDF, m_bbox, m_bsdf, m_to_world, initialize_mesh_vertices)
     MTS_IMPORT_TYPES()
 
     using typename Base::ScalarSize;
@@ -25,11 +25,11 @@ public:
         }
         m_distance_field = props.volume<Volume<Float, Spectrum>>("distance_field");
         m_bbox = m_distance_field->bbox();
-        // reduce bbox size: distance field is defined only inside volume
-        m_bbox.min += 2*math::RayEpsilon<Float>;
-        m_bbox.max -= 2*math::RayEpsilon<Float>;
 
-        Log(Debug, "distance_field = %s", m_distance_field->to_string());
+        initialize_mesh_vertices();
+
+        Log(Info, "m_bbox = %s", m_bbox);
+        Log(Info, "to_world = %s", m_to_world);
     }
 
     // =============================================================
@@ -45,15 +45,20 @@ public:
         return d;
     }
 
-    void fill_surface_interaction(const Ray3f &ray, const Float * /*cache*/,
-                                  SurfaceInteraction3f &si_out, Mask active) const override {
+    SurfaceInteraction3f _fill_surface_interaction(const Ray3f &ray, const Float * /*cache*/,
+                                  const SurfaceInteraction3f &si_out, Mask active) const override {
         MTS_MASK_ARGUMENT(active);
 
+        //Log(Trace, "******************************************************************************************\n0 %s", active);
         SurfaceInteraction3f si(si_out);
 
         si.p = ray(si.t);
 
         auto [d, n] = m_distance_field->eval_gradient(si, active);
+
+        Log(Trace, "active=%s", active);
+        Log(Trace, "d=%s", d.x());
+        Log(Trace, "n=%s", n);
 
         si.p = fmadd(ray.d, d, si.p);
 
@@ -67,8 +72,16 @@ public:
 
         si.wi = select(active, si.to_local(-ray.d), -ray.d);
 
-        si_out[active] = si;
+        si.shape = this;
+
+        return si;
+
+        //Log(Trace, "1 %s", active);
     }
+
+    /*ScalarBoundingBox3f bbox() const override {
+        return m_distance_field->bbox();
+    }*/
 
     //! @}
     // =============================================================
@@ -94,8 +107,9 @@ public:
     MTS_DECLARE_CLASS()
 private:
     ref<Volume<Float, Spectrum>> m_distance_field;
+    //ScalarBoundingBox3f m_bbox;
 };
 
-MTS_IMPLEMENT_CLASS_VARIANT(ExplicitSDF, Shape)
+MTS_IMPLEMENT_CLASS_VARIANT(ExplicitSDF, SDF)
 MTS_EXPORT_PLUGIN(ExplicitSDF, "Grid3d SDF intersection primitive");
 NAMESPACE_END(mitsuba)

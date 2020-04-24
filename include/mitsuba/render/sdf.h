@@ -2,70 +2,76 @@
 
 #include <mitsuba/core/fwd.h>
 #include <mitsuba/render/interaction.h>
-#include <mitsuba/render/shape.h>
+#include <mitsuba/render/mesh.h>
 #include <mitsuba/core/struct.h>
 #include <mitsuba/core/transform.h>
 
 NAMESPACE_BEGIN(mitsuba)
 
 template <typename Float, typename Spectrum>
-class MTS_EXPORT_RENDER SDF : public Shape<Float, Spectrum> {
+class MTS_EXPORT_RENDER SDF : public Mesh<Float, Spectrum> {
 public:
-    MTS_IMPORT_BASE(Shape)
-    MTS_IMPORT_TYPES(BSDF, Medium)
+    MTS_IMPORT_BASE(Mesh, m_is_sdf, m_mesh, m_vertices, m_faces, m_normal_offset, m_bbox, m_vertex_size,
+                    m_face_size, m_to_world, m_vertex_count, m_face_count, m_vertex_struct,
+                    m_face_struct, bbox)
+    MTS_IMPORT_TYPES(BSDF)
 
-    using typename Base::ScalarIndex;
     using typename Base::ScalarSize;
-
-    /// Create a new Signed Distance Function (SDF)
-    SDF(const std::string &name);
+    using typename Base::ScalarIndex;
+    using typename Base::VertexHolder;
+    using typename Base::FaceHolder;
+    using typename Base::InputFloat;
+    using typename Base::InputPoint3f;
 
     // =========================================================================
     //! @{ \name Accessors (vertices, faces, normals, etc)
     // =========================================================================
 
-
     /// @}
     // =========================================================================
 
-    /// Compute smooth vertex normals and replace the current normal values
-    // void recompute_gradient_field();
-
     // =============================================================
-    //! @{ \name Shape interface implementation
+    //! @{ \name SDF interface implementation
     // =============================================================
 
     virtual Float distance(const Interaction3f &inter, Mask active) const = 0;
 
-    virtual std::pair<Mask, Float>
-    ray_intersect(const Ray3f &ray, Float * /*cache*/, Mask active) const override;
-
     virtual void fill_surface_interaction(const Ray3f &ray,
                                           const Float* /**/,
                                           SurfaceInteraction3f &si,
-                                          Mask active = true) const override;
-
-    virtual ScalarBoundingBox3f bbox() const override {
-        return m_bbox;
+                                          Mask active = true) const override {
+        auto si_ = _fill_surface_interaction(ray, nullptr, si, active);
+        si[active] = si_;
     };
 
-    ScalarSize primitive_count() const override { return 1; }
+    virtual SurfaceInteraction3f _fill_surface_interaction(const Ray3f &ray,
+                                          const Float* /**/,
+                                          const SurfaceInteraction3f &si,
+                                          Mask active = true) const = 0;
 
-    ScalarSize effective_primitive_count() const override { return 1; }
+    virtual std::pair<Mask, Float>
+    ray_intersect(const Ray3f &ray, Float *cache, Mask active) const override;
+
+    virtual ScalarBoundingBox3f bbox(ScalarIndex /**/) const override { return bbox(); };
+    virtual ScalarBoundingBox3f bbox(ScalarIndex /**/, const ScalarBoundingBox3f &/**/) const override { return bbox(); };
+
+    /*
+    virtual void traverse(TraversalCallback *callback) override;
+
+    virtual void parameters_changed() override;
+    */
 
     /// @}
     // =========================================================================
 
 protected:
     SDF(const Properties &);
-    inline SDF() {}
     virtual ~SDF();
+
+    void initialize_mesh_vertices();
 
     MTS_DECLARE_CLASS()
 protected:
-    std::string m_name;
-    ScalarBoundingBox3f m_bbox;
-    ScalarTransform4f m_to_world;
     ScalarInt32 m_sphere_tracing_steps;
 };
 
@@ -78,9 +84,10 @@ NAMESPACE_END(mitsuba)
 
 // Enable usage of array pointers for our types
 ENOKI_CALL_SUPPORT_TEMPLATE_BEGIN(mitsuba::SDF)
+    ENOKI_CALL_SUPPORT_METHOD(distance)
     ENOKI_CALL_SUPPORT_METHOD(fill_surface_interaction)
-    /*ENOKI_CALL_SUPPORT_GETTER_TYPE(faces, m_faces, uint8_t*)
-    ENOKI_CALL_SUPPORT_GETTER_TYPE(vertices, m_vertices, uint8_t*)*/
+    ENOKI_CALL_SUPPORT_METHOD(_fill_surface_interaction)
+    ENOKI_CALL_SUPPORT_METHOD(ray_intersect)
 ENOKI_CALL_SUPPORT_TEMPLATE_END(mitsuba::SDF)
 
 //! @}

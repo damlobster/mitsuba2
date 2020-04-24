@@ -116,7 +116,7 @@ public:
         Spectrum throughput(1.f), result(0.f);
 
         // ---------------------- First intersection ----------------------
-
+        Log(Trace, "1 PATH: %s %s", active, ray_);
         SurfaceInteraction3f si = scene->ray_intersect(ray, active);
         Mask valid_ray = si.is_valid();
         EmitterPtr emitter = si.emitter(scene);
@@ -205,8 +205,10 @@ public:
             }
 
             si = std::move(si_bsdf);
+            Log(Trace, "2 PATH: %s %s", depth, active);
         }
 
+        Log(Trace, "3 PATH: %s %s", result, valid_ray);
         return { result, valid_ray };
     }
 

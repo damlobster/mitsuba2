@@ -30,6 +30,7 @@ template <typename Float, typename Spectrum> class Shape;
 template <typename Float, typename Spectrum> class ShapeKDTree;
 template <typename Float, typename Spectrum> class Texture;
 template <typename Float, typename Spectrum> class Volume;
+template <typename Float, typename Spectrum> class SDF;
 
 template <typename Float, typename Spectrum> struct DirectionSample;
 template <typename Float, typename Spectrum> struct PositionSample;
@@ -85,7 +86,8 @@ template <typename Float_, typename Spectrum_> struct RenderAliases {
     using ImageBlock             = mitsuba::ImageBlock<FloatU, SpectrumU>;
     using ReconstructionFilter   = mitsuba::ReconstructionFilter<FloatU, SpectrumU>;
     using Texture                = mitsuba::Texture<FloatU, SpectrumU>;
-    using Volume              = mitsuba::Volume<FloatU, SpectrumU>;
+    using Volume                 = mitsuba::Volume<FloatU, SpectrumU>;
+    using SDF                    = mitsuba::SDF<FloatU, SpectrumU>;
 
     using ObjectPtr              = replace_scalar_t<Float, const Object *>;
     using BSDFPtr                = replace_scalar_t<Float, const BSDF *>;
@@ -93,6 +95,7 @@ template <typename Float_, typename Spectrum_> struct RenderAliases {
     using PhaseFunctionPtr       = replace_scalar_t<Float, const PhaseFunction *>;
     using ShapePtr               = replace_scalar_t<Float, const Shape *>;
     using EmitterPtr             = replace_scalar_t<Float, const Emitter *>;
+    using SDFPtr                 = replace_scalar_t<Float, const SDF *>;
 };
 
 #define MTS_IMPORT_RENDER_BASIC_TYPES()                                                            \
@@ -140,11 +143,13 @@ template <typename Float_, typename Spectrum_> struct RenderAliases {
     using ReconstructionFilter   = typename RenderAliases::ReconstructionFilter;                   \
     using Texture                = typename RenderAliases::Texture;                                \
     using Volume                 = typename RenderAliases::Volume;                                 \
+    using SDF                    = typename RenderAliases::SDF;                                    \
     using ObjectPtr              = typename RenderAliases::ObjectPtr;                              \
     using BSDFPtr                = typename RenderAliases::BSDFPtr;                                \
     using MediumPtr              = typename RenderAliases::MediumPtr;                              \
     using ShapePtr               = typename RenderAliases::ShapePtr;                               \
-    using EmitterPtr             = typename RenderAliases::EmitterPtr;
+    using EmitterPtr             = typename RenderAliases::EmitterPtr;                             \
+    using SDFPtr                 = typename RenderAliases::SDFPtr;
 
 // -----------------------------------------------------------------------------
 

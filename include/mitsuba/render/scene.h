@@ -10,7 +10,7 @@ NAMESPACE_BEGIN(mitsuba)
 template <typename Float, typename Spectrum>
 class MTS_EXPORT_RENDER Scene : public Object {
 public:
-    MTS_IMPORT_TYPES(BSDF, Emitter, Film, Sampler, Shape, Sensor, Integrator, Medium, MediumPtr)
+    MTS_IMPORT_TYPES(BSDF, Emitter, Film, Sampler, Shape, Sensor, Integrator, Medium, MediumPtr, SDFPtr)
 
     /// Instantiate a scene from a \ref Properties object
     Scene(const Properties &props);

@@ -6,32 +6,39 @@
 
 NAMESPACE_BEGIN(mitsuba)
 
+
+
 MTS_VARIANT SDF<Float, Spectrum>::SDF(const Properties &props) : Base(props) {
-    m_sphere_tracing_steps = props.int_("sphere_tracing_steps", 50);
+        /// Identifier (if available)
+    m_sphere_tracing_steps = props.int_("sphere_tracing_steps", 100);
     if(m_sphere_tracing_steps<=0)
-        Throw("sphere_tracing_steps should be positive");
+        Throw("sphere_tracing_steps should be greater than 0");
+
+    m_mesh = false;
+    m_is_sdf = true;
 }
 
 MTS_VARIANT SDF<Float, Spectrum>::~SDF() {}
 
 MTS_VARIANT std::pair<typename SDF<Float, Spectrum>::Mask, Float>
-SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float * /*cache*/,
-                                         Mask active) const {
-
+SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float* cache, Mask active) const {
+    ENOKI_MARK_USED(cache);
     // Taken from Keinert, B. et al. (2014). Enhanced Sphere Tracing.
 
     ScopedPhase sp(ProfilerPhase::RayIntersectSDF);
 
-    auto [valid, mint, maxt] = bbox().ray_intersect(ray);
+    auto [valid, mint, maxt] = m_bbox.ray_intersect(ray);
 
-    Mask originInside = bbox().contains(ray.o);
+    //Mask originInside = m_bbox.contains(ray.o);
+    Mask originInside = mint < ray.mint;
     masked(mint, originInside) = ray.mint;
     masked(mint, !originInside) += 10*math::RayEpsilon<Float>;
 
     active &= valid && mint <= ray.maxt && maxt > ray.mint;
 
-    if(none(active))
-        return { active, math::Infinity<Float> };
+    Log(Trace, "1 active=%s, mint=%s / %s, maxt=%s / %s", active, ray.mint, mint, ray.maxt, maxt);
+    if(none_or<false>(active))
+        return { active, maxt };
 
     Interaction3f it(mint, ray.time, ray.wavelengths, ray(mint));
     const ScalarFloat epsilon = math::RayEpsilon<Float>/2;
@@ -42,12 +49,21 @@ SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float * /*cache*/,
     Float stepLength = 0;
     const Float functionSign = sign(distance(it, active));
 
+    Log(Trace, "2 ray.o=%s, mint=%s / %s, maxt=%s / %s", ray.o, ray.mint, mint, ray.maxt, maxt);
     for (int i = 0; i < m_sphere_tracing_steps; ++i) {
 
-        Float signedRadius = functionSign * distance(it, active);
+        Float dist = distance(it, active);
+        Float signedRadius = functionSign * dist;
         Float radius = abs(signedRadius);
 
         Mask sorFail = omega > 1 && (radius + previousRadius) < stepLength;
+
+        Log(Trace, " * %s: r=%s", i, dist);
+        Log(Trace, " * %s: it.t=%s", i, it.t);
+        Log(Trace, " * %s: candidate_t=%s", i, candidate_t);
+        Log(Trace, " * %s: active=%s", i, active);
+        Log(Trace, " * %s: sorFail=%s", i, sorFail);
+
         masked(stepLength, active) = select(sorFail, stepLength - omega * stepLength, signedRadius * omega);
         masked(omega, active && sorFail) = 1;
 
@@ -60,24 +76,95 @@ SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float * /*cache*/,
 
         active &= sorFail || (error >= epsilon && it.t <= maxt);
 
-        if (none_or<false>(active))
-            break;
+        if constexpr (is_cuda_array_v<Float>){
+            if (i%5==0 && none(active))
+                break;
+        }else{
+            if (none(active))
+                break;
+        }
 
         masked(it.t, active) += stepLength;
         masked(it.p, active) = ray(it.t);
     }
 
     Mask missed = (it.t > ray.maxt || candidate_error > epsilon); // && !forceHit;
-    return { !missed, select(!missed, candidate_t, math::Infinity<Float>) };
+
+    Log(Trace, "4 missed=%s", missed);
+
+    return { !missed, select(!missed, candidate_t, maxt) };
 }
 
-MTS_VARIANT void SDF<Float, Spectrum>::fill_surface_interaction(const Ray3f & /*ray*/,
-                                                                  const Float * /*cache*/,
-                                                                  SurfaceInteraction3f & /*si*/,
-                                                                  Mask /*active*/) const {
-    NotImplementedError("fill_surface_interaction");
+MTS_VARIANT void SDF<Float, Spectrum>::initialize_mesh_vertices() {
+
+    if constexpr (is_cuda_array_v<Float>) {
+        const int NV = 24, NF= 12;
+
+        // position, normal, position, normal, ...
+        InputPoint3f vertices[2*NV] = {
+            {0, 0, 1}, {-1, 0, 0}, {0, 1, 0}, {-1, 0, 0},
+            {0, 0, 0}, {-1, 0, 0}, {0, 1, 1}, {0, 1, 0},
+            {1, 1, 0}, {0, 1, 0},  {0, 1, 0}, {0, 1, 0},
+            {1, 1, 1}, {1, 0, 0},  {1, 0, 0}, {1, 0, 0},
+            {1, 1, 0}, {1, 0, 0},  {1, 0, 1}, {0, -1, 0},
+            {0, 0, 0}, {0, -1, 0}, {1, 0, 0}, {0, -1, 0},
+            {1, 1, 0}, {0, 0, -1}, {0, 0, 0}, {0, 0, -1},
+            {0, 1, 0}, {0, 0, -1}, {0, 1, 1}, {0, 0, 1},
+            {1, 0, 1}, {0, 0, 1},  {1, 1, 1}, {0, 0, 1},
+            {0, 1, 1}, {-1, 0, 0}, {1, 1, 1}, {0, 1, 0},
+            {1, 0, 1}, {1, 0, 0},  {0, 0, 1}, {0, -1, 0},
+            {1, 0, 0}, {0, 0, -1}, {0, 0, 1}, {0, 0, 1}
+        };
+
+        const std::array<ScalarIndex, 3> faces[NF] = {
+            {0,1,2},    {3,4,5},    {6,7,8},    {9,10,11},
+            {12,13,14}, {15,16,17}, {0,18,1},   {3,19,4},
+            {6,20,7},   {9,21,10},  {12,22,13}, {15,23,16}
+        };
+
+        m_vertex_count = NV;
+        m_face_count = NF;
+
+        m_vertex_struct = new Struct();
+        for (auto name : { "x", "y", "z", "nx", "ny", "nz" })
+            m_vertex_struct->append(name, struct_type_v<InputFloat>);
+        m_normal_offset = (ScalarIndex) m_vertex_struct->offset("nx");
+
+        m_face_struct = new Struct();
+        for (size_t i = 0; i < 3; ++i)
+            m_face_struct->append(tfm::format("i%i", i), struct_type_v<ScalarIndex>);
+
+        m_vertex_size = (ScalarSize) m_vertex_struct->size();
+        m_face_size   = (ScalarSize) m_face_struct->size();
+        m_vertices    = VertexHolder(new uint8_t[(m_vertex_count + 1) * m_vertex_size]);
+        m_faces       = FaceHolder(new uint8_t[(m_face_count + 1) * m_face_size]);
+
+        m_to_world = ScalarTransform4f::translate(m_bbox.min) * ScalarTransform4f::scale(ScalarVector3f(m_bbox.max - m_bbox.min));
+        Log(Info, "m_to_world = %s", m_to_world);
+
+        uint8_t* vs = m_vertices.get();
+        for(uint i = 0; i < m_vertex_count; i++){
+            auto v = m_to_world.transform_affine(vertices[2*i]);
+            Log(Info, "0 v = %s", v);
+            store_unaligned(vs + (i * m_vertex_size), v);
+            auto n = vertices[2*i + 1];
+            store_unaligned(vs + (i * m_vertex_size + m_normal_offset), n);
+        }
+
+        memcpy(m_faces.get(), faces, m_face_count * m_face_size);
+
+    } else {
+        m_face_count = 1;
+    }
+
+    Log(Trace, "%s", this);
 }
 
-MTS_IMPLEMENT_CLASS_VARIANT(SDF, Shape)
+
+/*MTS_VARIANT void SDF<Float, Spectrum>::traverse(TraversalCallback * callback) { }
+
+MTS_VARIANT void SDF<Float, Spectrum>::parameters_changed() { }*/
+
+MTS_IMPLEMENT_CLASS_VARIANT(SDF, Object, "sdf")
 MTS_INSTANTIATE_CLASS(SDF)
 NAMESPACE_END(mitsuba)

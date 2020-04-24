@@ -15,7 +15,7 @@ NAMESPACE_BEGIN(mitsuba)
 template <typename Float, typename Spectrum>
 class MTS_EXPORT_RENDER Shape : public Object {
 public:
-    MTS_IMPORT_TYPES(BSDF, Medium, Emitter, Sensor);
+    MTS_IMPORT_TYPES(BSDF, Medium, Emitter, Sensor, SDF);
 
     // Use 32 bit indices to keep track of indices to conserve memory
     using ScalarIndex = uint32_t;
@@ -255,6 +255,9 @@ public:
     /// Is this shape a triangle mesh?
     bool is_mesh() const { return m_mesh; }
 
+    /// Is this shape a SDF?
+    bool is_sdf() const { return m_is_sdf; }
+
     /// Does the surface of this shape mark a medium transition?
     bool is_medium_transition() const { return m_interior_medium.get() != nullptr ||
                                                m_exterior_medium.get() != nullptr; }
@@ -330,6 +333,7 @@ protected:
     void set_children();
 protected:
     bool m_mesh = false;
+    bool m_is_sdf = false;
     ref<BSDF> m_bsdf;
     ref<Emitter> m_emitter;
     ref<Sensor> m_sensor;
@@ -348,6 +352,7 @@ NAMESPACE_END(mitsuba)
 ENOKI_CALL_SUPPORT_TEMPLATE_BEGIN(mitsuba::Shape)
     ENOKI_CALL_SUPPORT_METHOD(normal_derivative)
     ENOKI_CALL_SUPPORT_METHOD(fill_surface_interaction)
+    ENOKI_CALL_SUPPORT_METHOD(ray_intersect)
     ENOKI_CALL_SUPPORT_GETTER_TYPE(emitter, m_emitter, const typename Class::Emitter *)
     ENOKI_CALL_SUPPORT_GETTER_TYPE(sensor, m_sensor, const typename Class::Sensor *)
     ENOKI_CALL_SUPPORT_GETTER_TYPE(bsdf, m_bsdf, const typename Class::BSDF *)
@@ -355,6 +360,7 @@ ENOKI_CALL_SUPPORT_TEMPLATE_BEGIN(mitsuba::Shape)
                                    const typename Class::Medium *)
     ENOKI_CALL_SUPPORT_GETTER_TYPE(exterior_medium, m_exterior_medium,
                                    const typename Class::Medium *)
+    ENOKI_CALL_SUPPORT_GETTER(is_sdf, m_is_sdf)
     auto is_emitter() const { return neq(emitter(), nullptr); }
     auto is_sensor() const { return neq(sensor(), nullptr); }
     auto is_medium_transition() const { return neq(interior_medium(), nullptr) ||

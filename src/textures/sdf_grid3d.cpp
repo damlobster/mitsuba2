@@ -127,7 +127,7 @@ protected:
 template <typename Float, typename Spectrum, uint32_t Channels, bool Raw>
 class GridVolumeImpl final : public Volume<Float, Spectrum> {
 public:
-    MTS_IMPORT_BASE(Volume, is_inside, update_bbox, m_world_to_local)
+    MTS_IMPORT_BASE(Volume, is_inside, update_bbox, m_world_to_local, m_bbox)
     MTS_IMPORT_TYPES()
 
     GridVolumeImpl(const Properties &props, const VolumeMetadata &meta,
@@ -142,6 +142,10 @@ public:
             m_world_to_local = m_metadata.transform * m_world_to_local;
             update_bbox();
         }
+
+        Log(Info, "world_to_local= %s", m_world_to_local);
+        Log(Info, "local_to_world= %s", m_world_to_local.inverse());
+        Log(Info, "bbox= %s", m_bbox);
 
         if (props.has_property("max_value")) {
             m_fixed_max    = true;
@@ -215,6 +219,7 @@ public:
             Throw("eval_gradient() is currently only supported for single channel grids!", to_string());
         else {
             auto [result, gradient] = eval_impl<true>(it, active);
+            Log(Debug, "%s %s %s", active, result.x(), gradient);
             return { result.x(), gradient };
         }
     }
@@ -235,14 +240,14 @@ public:
             if (none_or<false>(active))
                 return std::make_pair(zero<ResultType>(), zero<Vector3f>());
             auto [result, gradient] = interpolate<true>(p, it.wavelengths, active);
-            return std::make_pair(select(active, result, zero<ResultType>()),
+            return std::make_pair(select(active, result, math::Infinity<Float>),
                                   select(active, gradient, zero<Vector3f>()));
         } else {
             if (none_or<false>(active))
                 return zero<ResultType>();
 
             ResultType result = interpolate<false>(p, it.wavelengths, active);
-            return select(active, result, zero<ResultType>());
+            return select(active, result, math::Infinity<Float>);
         }
     }
 
