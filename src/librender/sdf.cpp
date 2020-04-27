@@ -34,13 +34,13 @@ SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float * /*cache*/,
         return { active, math::Infinity<Float> };
 
     Interaction3f it(mint, ray.time, ray.wavelengths, ray(mint));
-    ScalarFloat epsilon = math::RayEpsilon<Float> / 10;
-    Float omega = 1;
+    const ScalarFloat epsilon = math::RayEpsilon<Float>/2;
+    Float omega = 1.2;
     Float candidate_error = math::Infinity<Float>;
     Float candidate_t = mint;
     Float previousRadius = 0;
     Float stepLength = 0;
-    Float functionSign = sign(distance(it, active));
+    const Float functionSign = sign(distance(it, active));
 
     for (int i = 0; i < m_sphere_tracing_steps; ++i) {
 
@@ -58,7 +58,7 @@ SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float * /*cache*/,
         masked(candidate_t, updatable) = it.t;
         masked(candidate_error, updatable) = error;
 
-        active &= sorFail || error > epsilon && it.t < maxt;
+        active &= sorFail || (error >= epsilon && it.t <= maxt);
 
         if (none_or<false>(active))
             break;
