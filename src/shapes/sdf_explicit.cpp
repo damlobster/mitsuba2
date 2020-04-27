@@ -25,8 +25,11 @@ public:
         }
         m_distance_field = props.volume<Volume<Float, Spectrum>>("distance_field");
         m_bbox = m_distance_field->bbox();
-        m_bbox.min -= 2*math::RayEpsilon<Float>;
-        m_bbox.max += 2*math::RayEpsilon<Float>;
+        // reduce bbox size: distance field is defined only inside volume
+        m_bbox.min += 2*math::RayEpsilon<Float>;
+        m_bbox.max -= 2*math::RayEpsilon<Float>;
+
+        Log(Debug, "distance_field = %s", m_distance_field->to_string());
     }
 
     // =============================================================
@@ -37,7 +40,7 @@ public:
         MTS_MASK_ARGUMENT(active);
 
         Mask inside = m_bbox.contains(it.p);
-        auto d = m_distance_field->eval_1(it, active && inside);
+        Float d = m_distance_field->eval_1(it, active && inside);
         masked(d, active && !inside) = m_bbox.distance(it.p);
         return d;
     }
