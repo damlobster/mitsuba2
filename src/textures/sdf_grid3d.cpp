@@ -379,8 +379,6 @@ public:
                 //Float voxels[(4^3)/2];
                 Float voxels[4][4][4];
 
-                const auto raw_data = m_data.data();
-
                 // Load grid voxels to perform catmull-rom interpolation
                 for(int z = -1; z<3; z++)
                 for(int y = -1; y<3; y++)
@@ -428,8 +426,6 @@ public:
 
                 // (z * ny + y) * nx + x
                 Index index = fmadd(fmadd(pi.z(), ny, pi.y()), nx, pi.x());
-
-                const auto raw_data = m_data.data();
 
                 //Float voxels[(4^3)/2];
                 Float vox[4][4][4];
