@@ -365,8 +365,6 @@ public:
                 if constexpr(!Raw && Channels != 1)
                     NotImplementedError("Catmull interpolation only support 1 channel raw grids");
 
-                constexpr bool debug = false;
-
                 // Integer part (clamped to include the upper bound)
                 Index3 pi  = enoki::floor2int<Index3>(p);
                 pi[active] = clamp(pi, 1, max_coordinates - 2);
@@ -412,7 +410,6 @@ public:
                     return std::make_pair(ResultType(sample), normalize(sample1 - sample0));
                 }else{
                     ResultType result(sample);
-                    if constexpr(debug) std::cout << sample << " " << result << std::endl;
                     return result;
                 }
             }
