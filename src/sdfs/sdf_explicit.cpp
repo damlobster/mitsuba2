@@ -27,9 +27,6 @@ public:
         m_bbox = m_distance_field->bbox();
 
         initialize_mesh_vertices();
-
-        Log(Info, "m_bbox = %s", m_bbox);
-        Log(Info, "to_world = %s", m_to_world);
     }
 
     // =============================================================
@@ -49,16 +46,11 @@ public:
                                   const SurfaceInteraction3f &si_out, Mask active) const override {
         MTS_MASK_ARGUMENT(active);
 
-        //Log(Trace, "******************************************************************************************\n0 %s", active);
         SurfaceInteraction3f si(si_out);
 
         si.p = ray(si.t);
 
         auto [d, n] = m_distance_field->eval_gradient(si, active);
-
-        Log(Trace, "active=%s", active);
-        Log(Trace, "d=%s", d.x());
-        Log(Trace, "n=%s", n);
 
         si.p = fmadd(ray.d, d, si.p);
 
@@ -77,12 +69,7 @@ public:
 
         return si;
 
-        //Log(Trace, "1 %s", active);
     }
-
-    /*ScalarBoundingBox3f bbox() const override {
-        return m_distance_field->bbox();
-    }*/
 
     //! @}
     // =============================================================

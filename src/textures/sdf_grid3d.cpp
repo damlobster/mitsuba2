@@ -143,10 +143,6 @@ public:
             update_bbox();
         }
 
-        Log(Info, "world_to_local= %s", m_world_to_local);
-        Log(Info, "local_to_world= %s", m_world_to_local.inverse());
-        Log(Info, "bbox= %s", m_bbox);
-
         if (props.has_property("max_value")) {
             m_fixed_max    = true;
             m_metadata.max = props.float_("max_value");
@@ -219,7 +215,6 @@ public:
             Throw("eval_gradient() is currently only supported for single channel grids!", to_string());
         else {
             auto [result, gradient] = eval_impl<true>(it, active);
-            Log(Debug, "%s %s %s", active, result.x(), gradient);
             return { result.x(), gradient };
         }
     }

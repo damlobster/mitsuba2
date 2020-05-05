@@ -36,7 +36,6 @@ SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float* cache, Mask active)
 
     active &= valid && mint <= ray.maxt && maxt > ray.mint;
 
-    Log(Trace, "1 active=%s, mint=%s / %s, maxt=%s / %s", active, ray.mint, mint, ray.maxt, maxt);
     if(none_or<false>(active))
         return { active, maxt };
 
@@ -49,7 +48,6 @@ SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float* cache, Mask active)
     Float stepLength = 0;
     const Float functionSign = sign(distance(it, active));
 
-    Log(Trace, "2 ray.o=%s, mint=%s / %s, maxt=%s / %s", ray.o, ray.mint, mint, ray.maxt, maxt);
     for (int i = 0; i < m_sphere_tracing_steps; ++i) {
 
         Float dist = distance(it, active);
@@ -57,12 +55,6 @@ SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float* cache, Mask active)
         Float radius = abs(signedRadius);
 
         Mask sorFail = omega > 1 && (radius + previousRadius) < stepLength;
-
-        Log(Trace, " * %s: r=%s", i, dist);
-        Log(Trace, " * %s: it.t=%s", i, it.t);
-        Log(Trace, " * %s: candidate_t=%s", i, candidate_t);
-        Log(Trace, " * %s: active=%s", i, active);
-        Log(Trace, " * %s: sorFail=%s", i, sorFail);
 
         masked(stepLength, active) = select(sorFail, stepLength - omega * stepLength, signedRadius * omega);
         masked(omega, active && sorFail) = 1;
@@ -89,8 +81,6 @@ SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float* cache, Mask active)
     }
 
     Mask missed = (candidate_t > ray.maxt || candidate_error > epsilon); // && !forceHit;
-
-    Log(Trace, "4 missed=%s", missed);
 
     return { !missed, select(!missed, candidate_t, maxt) };
 }
@@ -140,12 +130,10 @@ MTS_VARIANT void SDF<Float, Spectrum>::initialize_mesh_vertices() {
         m_faces       = FaceHolder(new uint8_t[(m_face_count + 1) * m_face_size]);
 
         m_to_world = ScalarTransform4f::translate(m_bbox.min) * ScalarTransform4f::scale(ScalarVector3f(m_bbox.max - m_bbox.min));
-        Log(Info, "m_to_world = %s", m_to_world);
 
         uint8_t* vs = m_vertices.get();
         for(uint i = 0; i < m_vertex_count; i++){
             auto v = m_to_world.transform_affine(vertices[2*i]);
-            Log(Info, "0 v = %s", v);
             store_unaligned(vs + (i * m_vertex_size), v);
             auto n = vertices[2*i + 1];
             store_unaligned(vs + (i * m_vertex_size + m_normal_offset), n);
@@ -156,8 +144,6 @@ MTS_VARIANT void SDF<Float, Spectrum>::initialize_mesh_vertices() {
     } else {
         m_face_count = 1;
     }
-
-    Log(Trace, "%s", this);
 }
 
 
