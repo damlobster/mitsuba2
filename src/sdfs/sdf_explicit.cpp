@@ -63,16 +63,17 @@ public:
         si.p = fmadd(ray.d, d, si.p);
 
         si.sh_frame.n = n;
-        auto [dp_du, dp_dv] = coordinate_system(si.sh_frame.n);
+        auto [dp_du, dp_dv] = coordinate_system(n);
         si.dp_du = dp_du;
         si.dp_dv = dp_dv;
 
-        si.n = si.sh_frame.n;
+        si.n = n;
         si.time = ray.time;
 
         si.wi = select(active, si.to_local(-ray.d), -ray.d);
 
         si.shape = this;
+        si.prim_index = 0;
 
         return si;
 

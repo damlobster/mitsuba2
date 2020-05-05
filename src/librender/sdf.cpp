@@ -88,7 +88,7 @@ SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float* cache, Mask active)
         masked(it.p, active) = ray(it.t);
     }
 
-    Mask missed = (it.t > ray.maxt || candidate_error > epsilon); // && !forceHit;
+    Mask missed = (candidate_t > ray.maxt || candidate_error > epsilon); // && !forceHit;
 
     Log(Trace, "4 missed=%s", missed);
 

@@ -234,7 +234,9 @@ public:
         using ResultType = std::conditional_t<uses_srgb_model, UnpolarizedSpectrum, StorageType>;
 
         auto p = m_world_to_local * it.p;
-        active &= all((p >= 0) && (p <= 1));
+        // TOOD sometimes slightly outside grid (RayEpsilon problem?)
+        // but it's ok: ret dist is a lower bound for sphere tracing
+        // active &= all((p >= 0) && (p <= 1));
 
         if constexpr (with_gradient) {
             if (none_or<false>(active))
@@ -360,7 +362,7 @@ public:
                         Vector3f gradient(fmadd(gx0, rf.z(), gx1 * f.z()) * (nx - 1),
                                         fmadd(gy0, rf.z(), gy1 * f.z()) * (ny - 1),
                                         fmadd(gz0, rf.y(), gz1 * f.y()) * (nz - 1));
-                        return std::make_pair(result, gradient);
+                        return std::make_pair(result, normalize(gradient));
                 } else {
                     return result;
                 }

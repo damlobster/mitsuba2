@@ -121,49 +121,26 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray_, Mask active) const {
 
             SDFPtr sdf( select(is_sdf, (SDFPtr)si.shape, nullptr) );
 
-            auto enter_sdf = is_sdf && dot(si.wi, si.sh_frame.n) > 0;
-
-            //ray.o[!enter_sdf] = si.p;
-            //ray.mint[enter_sdf] -= si.t;
-
             auto [hit_sdf, t] = sdf->ray_intersect(ray, nullptr, is_sdf);
 
             SurfaceInteraction3f si_(si);
+            si_.t[hit_sdf] = t;
             si_ = sdf->_fill_surface_interaction(ray, nullptr, si_, hit_sdf);
+
+            si_.sh_frame.s = normalize(
+                fnmadd(si_.sh_frame.n, dot(si_.sh_frame.n, si_.dp_du), si_.dp_du));
+            si_.sh_frame.t = cross(si_.sh_frame.n, si_.sh_frame.s);
+
             si[hit_sdf] = si_;
+            // doesn't work? : sdf->fill_surface_interaction(ray, nullptr, si, hit_sdf);
 
-            ray.o[!hit_sdf] = ray(t + math::RayEpsilon<Float>);
+            auto missed_sdf = is_sdf && !hit_sdf;
+            ray.o[missed_sdf] = ray(t + math::RayEpsilon<Float>);
+            ray.mint[missed_sdf] = 0;
+            ray.maxt[missed_sdf] = math::Infinity<Float>;
 
-            si[!hit_sdf] = ray_intersect_gpu(ray, !hit_sdf);
+            si[missed_sdf] = ray_intersect_gpu(ray, missed_sdf);
         }
-
-
-        // auto is_sdf = active && si.shape->is_sdf();
-
-        // if (any_or<true>(is_sdf)) {
-
-        //     SDFPtr sdf( select(is_sdf, (SDFPtr)si.shape, nullptr) );
-
-        //     auto backside = dot(si.wi, si.sh_frame.n) < 0;
-        //     auto inside_sdf = is_sdf && backside;
-        //     auto enter_sdf = is_sdf && !backside;
-
-        //     //auto cont_ray = si.spawn_ray(ray.d);
-        //     si[is_sdf] = ray_intersect_gpu(cont_ray, is_sdf);
-        //     ray.maxt[is_sdf] += si.t + math::RayEpsilon<Float>;
-
-        //     auto [hit_sdf, t] = sdf->ray_intersect(ray, nullptr, is_sdf);
-
-        //     sdf->fill_surface_interaction(ray, nullptr, si, hit_sdf);
-
-        //     //auto missed_or_leave = is_sdf && (!hit_sdf || !enter_sdf);
-        //     auto missed_or_leave = is_sdf && !hit_sdf;
-
-        //     si.p[missed_or_leave] = ray(t + 10 * math::RayEpsilon<Float>);
-        //     cont_ray.o[missed_or_leave] = ray(t + 10 * math::RayEpsilon<Float>);
-
-        //     si[missed_or_leave] = ray_intersect_gpu(cont_ray, missed_or_leave);
-        // }
 
     } else {
         si = ray_intersect_cpu(ray_, active);
@@ -186,13 +163,39 @@ Scene<Float, Spectrum>::ray_intersect_naive(const Ray3f &ray, Mask active) const
 }
 
 MTS_VARIANT typename Scene<Float, Spectrum>::Mask
-Scene<Float, Spectrum>::ray_test(const Ray3f &ray, Mask active) const {
+Scene<Float, Spectrum>::ray_test(const Ray3f &ray_, Mask active) const {
     MTS_MASKED_FUNCTION(ProfilerPhase::RayTest, active);
 
-    if constexpr (is_cuda_array_v<Float>)
-        return ray_test_gpu(ray, active);
-    else
-        return ray_test_cpu(ray, active);
+    SurfaceInteraction3f si;
+    if constexpr (is_cuda_array_v<Float>){
+        Ray3f ray = ray_;
+        si = ray_intersect_gpu(ray, active);
+
+        auto is_sdf = active && si.shape->is_sdf();
+
+        auto result = si.t < math::Infinity<Float> && !is_sdf;
+
+        if (any_or<true>(is_sdf)) {
+
+            SDFPtr sdf( select(is_sdf, (SDFPtr)si.shape, nullptr) );
+
+            auto [hit_sdf, t] = sdf->ray_intersect(ray, nullptr, is_sdf);
+
+            result |= hit_sdf;
+
+            auto missed_sdf = is_sdf && !hit_sdf;
+            ray.o[missed_sdf] = ray(t + 10*math::RayEpsilon<Float>);
+            ray.mint[missed_sdf] = 0;
+            ray.maxt[missed_sdf] = math::Infinity<Float>;
+
+            result |= ray_test_gpu(ray, missed_sdf);
+
+        }
+        return result;
+
+    }else{
+        return ray_test_cpu(ray_, active);
+    }
 }
 
 MTS_VARIANT std::pair<typename Scene<Float, Spectrum>::DirectionSample3f, Spectrum>
