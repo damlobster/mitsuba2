@@ -214,13 +214,13 @@ public:
         if constexpr (Channels != 1)
             Throw("eval_gradient() is currently only supported for single channel grids!", to_string());
         else {
-            auto [result, gradient] = eval_impl<true>(it, active);
+            auto [result, gradient] = eval_impl<true, false>(it, active);
             return { result.x(), gradient };
         }
     }
 
 
-    template <bool with_gradient>
+    template <bool with_gradient, bool detached=true>
     MTS_INLINE auto eval_impl(const Interaction3f &it, Mask active) const {
         MTS_MASKED_FUNCTION(ProfilerPhase::TextureEvaluate, active);
 
@@ -236,14 +236,14 @@ public:
         if constexpr (with_gradient) {
             if (none_or<false>(active))
                 return std::make_pair(zero<ResultType>(), zero<Vector3f>());
-            auto [result, gradient] = interpolate<true>(p, it.wavelengths, active);
+            auto [result, gradient] = interpolate<true, detached>(p, it.wavelengths, active);
             return std::make_pair(select(active, result, math::Infinity<Float>),
                                   select(active, gradient, zero<Vector3f>()));
         } else {
             if (none_or<false>(active))
                 return zero<ResultType>();
 
-            ResultType result = interpolate<false>(p, it.wavelengths, active);
+            ResultType result = interpolate<false, detached>(p, it.wavelengths, active);
             return select(active, result, math::Infinity<Float>);
         }
     }
@@ -260,7 +260,7 @@ public:
      * The passed `active` mask must disable lanes that are not within the
      * domain.
      */
-    template <bool with_gradient>
+    template <bool with_gradient, bool detached=true>
     MTS_INLINE auto interpolate(Point3f p, const Wavelength &wavelengths,
                                 Mask active) const {
         using Index   = uint32_array_t<Float>;
@@ -278,7 +278,13 @@ public:
         Point3f max_coordinates(nx - 1.f, ny - 1.f, nz - 1.f);
         p *= max_coordinates;
 
-        const auto raw_data = m_data.data();
+         auto raw_data = [&](){
+                if constexpr (is_diff_array_v<Float> && detached){
+                    return detach(m_data).data();
+                }else{
+                    return m_data.data();
+                }
+            }();
 
         switch(m_interpolation_mode){
 
