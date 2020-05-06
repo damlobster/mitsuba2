@@ -147,9 +147,13 @@ MTS_VARIANT void SDF<Float, Spectrum>::initialize_mesh_vertices() {
 }
 
 
-/*MTS_VARIANT void SDF<Float, Spectrum>::traverse(TraversalCallback * callback) { }
+MTS_VARIANT void SDF<Float, Spectrum>::traverse(TraversalCallback * callback) {
+    Base::traverse(callback);
+}
 
-MTS_VARIANT void SDF<Float, Spectrum>::parameters_changed() { }*/
+MTS_VARIANT void SDF<Float, Spectrum>::parameters_changed(const std::vector<std::string> &keys) {
+    Base::parameters_changed(keys);
+}
 
 MTS_IMPLEMENT_CLASS_VARIANT(SDF, Object, "sdf")
 MTS_INSTANTIATE_CLASS(SDF)

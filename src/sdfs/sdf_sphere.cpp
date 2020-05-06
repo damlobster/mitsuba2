@@ -90,17 +90,19 @@ public:
     //! @}
     // =============================================================
 
-    void traverse(TraversalCallback *callback) override {
+#if defined(MTS_ENABLE_OPTIX)
+    virtual void traverse(TraversalCallback *callback) override {
         callback->put_parameter("center", m_center);
         callback->put_parameter("radius", m_radius);
         Base::traverse(callback);
     }
 
-    void parameters_changed() override {
-        Base::parameters_changed();
+    virtual void parameters_changed(const std::vector<std::string> &keys) override {
+        Base::parameters_changed(keys);
         m_object_to_world = ScalarTransform4f::translate(m_center);
         m_world_to_object = m_object_to_world.inverse();
     }
+#endif
 
     std::string to_string() const override {
         std::ostringstream oss;

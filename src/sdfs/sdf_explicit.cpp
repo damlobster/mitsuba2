@@ -74,15 +74,19 @@ public:
     //! @}
     // =============================================================
 
-    void traverse(TraversalCallback *callback) override {
+#if defined(MTS_ENABLE_OPTIX)
+
+    virtual void traverse(TraversalCallback *callback) override {
         m_distance_field->traverse(callback);
         Base::traverse(callback);
     }
 
-    void parameters_changed() override {
-        m_distance_field->parameters_changed();
-        Base::parameters_changed();
+    virtual void parameters_changed(const std::vector<std::string> &keys) override {
+        Base::parameters_changed(keys);
+        m_distance_field->parameters_changed(keys);
     }
+
+#endif
 
     std::string to_string() const override {
         std::ostringstream oss;
