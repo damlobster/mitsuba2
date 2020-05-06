@@ -75,11 +75,12 @@ public:
     // =============================================================
 
     void traverse(TraversalCallback *callback) override {
-        callback->put_parameter("distance_field", m_distance_field);
+        m_distance_field->traverse(callback);
         Base::traverse(callback);
     }
 
     void parameters_changed() override {
+        m_distance_field->parameters_changed();
         Base::parameters_changed();
     }
 

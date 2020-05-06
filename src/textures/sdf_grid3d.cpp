@@ -472,7 +472,7 @@ public:
 
     void traverse(TraversalCallback *callback) override {
         callback->put_parameter("data", m_data);
-        callback->put_parameter("size", m_size);
+        //callback->put_parameter("size", m_size);
         Base::traverse(callback);
     }
 
