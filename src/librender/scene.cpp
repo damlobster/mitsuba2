@@ -115,7 +115,7 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray_, Mask active) const {
         Ray3f ray = ray_;
         si = ray_intersect_gpu(ray, active);
 
-        auto is_sdf = active && si.shape->is_sdf();
+        auto is_sdf = active && si.is_valid() && si.shape->is_sdf();
 
         if (any_or<true>(is_sdf)) {
 
@@ -123,6 +123,7 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray_, Mask active) const {
 
             auto [hit_sdf, t] = sdf->ray_intersect(ray, nullptr, is_sdf);
 
+            // doesn't work ?? : sdf->fill_surface_interaction(ray, nullptr, si, hit_sdf);
             SurfaceInteraction3f si_(si);
             si_.t[hit_sdf] = t;
             si_ = sdf->_fill_surface_interaction(ray, nullptr, si_, hit_sdf);
@@ -132,7 +133,6 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray_, Mask active) const {
             si_.sh_frame.t = cross(si_.sh_frame.n, si_.sh_frame.s);
 
             si[hit_sdf] = si_;
-            // doesn't work? : sdf->fill_surface_interaction(ray, nullptr, si, hit_sdf);
 
             auto missed_sdf = is_sdf && !hit_sdf;
             ray.o[missed_sdf] = ray(t + math::RayEpsilon<Float>);
@@ -173,7 +173,7 @@ Scene<Float, Spectrum>::ray_test(const Ray3f &ray_, Mask active) const {
 
         auto is_sdf = active && si.shape->is_sdf();
 
-        auto result = si.t < math::Infinity<Float> && !is_sdf;
+        auto result = active && si.is_valid() && !is_sdf;
 
         if (any_or<true>(is_sdf)) {
 
