@@ -53,7 +53,6 @@ public:
     ray_intersect(const Ray3f &ray, Float *cache, Mask active) const override;
 
 #if defined(MTS_ENABLE_OPTIX)
-    virtual ScalarBoundingBox3f bbox(ScalarIndex /**/, const ScalarBoundingBox3f &/**/) const override { return bbox(); };
     virtual void traverse(TraversalCallback *callback) override;
     virtual void parameters_changed(const std::vector<std::string> &/*keys*/ = {}) override;
 #endif

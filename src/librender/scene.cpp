@@ -115,15 +115,32 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray_, Mask active) const {
         Ray3f ray = ray_;
         si = ray_intersect_gpu(ray, active);
 
+        // ray intersected SDF bounding mesh
         auto is_sdf = active && si.is_valid() && si.shape->is_sdf();
 
         if (any_or<true>(is_sdf)) {
 
             SDFPtr sdf( select(is_sdf, (SDFPtr)si.shape, nullptr) );
 
+            // do sphere tracing to find SDF surface intersection
             auto [hit_sdf, t] = sdf->ray_intersect(ray, nullptr, is_sdf);
+            auto missed_sdf = is_sdf && !hit_sdf;
 
-            // doesn't work ?? : sdf->fill_surface_interaction(ray, nullptr, si, hit_sdf);
+            // in case we missed the SDF surface, we should check if an another
+            // mesh surface was inside the SDF domain.
+            // Note: could be removed if SDF domain never contains other meshes
+            ray.mint[missed_sdf] = si.t + math::RayEpsilon<Float>;
+            ray.maxt[missed_sdf] = t - math::RayEpsilon<Float>;
+            si[missed_sdf] = ray_intersect_gpu(ray, missed_sdf);
+            missed_sdf &= !si.is_valid();
+
+            // doesn't work ?? :
+            // sdf->fill_surface_interaction(ray, nullptr, si, hit_sdf);
+            // si.sh_frame.s[hit_sdf] = normalize(
+            //     fnmadd(si.sh_frame.n, dot(si.sh_frame.n, si.dp_du), si.dp_du));
+            // si.sh_frame.t[hit_sdf] = cross(si.sh_frame.n, si.sh_frame.s);
+
+            // ask the SDF to fill the surface intersection
             SurfaceInteraction3f si_(si);
             si_.t[hit_sdf] = t;
             si_ = sdf->_fill_surface_interaction(ray, nullptr, si_, hit_sdf);
@@ -134,7 +151,7 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray_, Mask active) const {
 
             si[hit_sdf] = si_;
 
-            auto missed_sdf = is_sdf && !hit_sdf;
+            // continue the ray after the SDF bounding mesh
             ray.o[missed_sdf] = ray(t + math::RayEpsilon<Float>);
             ray.mint[missed_sdf] = 0;
             ray.maxt[missed_sdf] = math::Infinity<Float>;
@@ -166,10 +183,9 @@ MTS_VARIANT typename Scene<Float, Spectrum>::Mask
 Scene<Float, Spectrum>::ray_test(const Ray3f &ray_, Mask active) const {
     MTS_MASKED_FUNCTION(ProfilerPhase::RayTest, active);
 
-    SurfaceInteraction3f si;
     if constexpr (is_cuda_array_v<Float>){
         Ray3f ray = ray_;
-        si = ray_intersect_gpu(ray, active);
+        SurfaceInteraction3f si = ray_intersect_gpu(ray, active);
 
         auto is_sdf = active && si.shape->is_sdf();
 
