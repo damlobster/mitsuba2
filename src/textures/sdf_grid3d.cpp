@@ -278,13 +278,13 @@ public:
         Point3f max_coordinates(nx - 1.f, ny - 1.f, nz - 1.f);
         p *= max_coordinates;
 
-         auto raw_data = [&](){
-                if constexpr (is_diff_array_v<Float> && detached){
-                    return detach(m_data).data();
-                }else{
-                    return m_data.data();
+        auto wgather = [&](const Index &index) {
+            if constexpr (!is_diff_array_v<Index> || detached) {
+                return gather<Float>(detach(m_data), index, active);
+            } else {
+                return gather<Float>(m_data, index, active);
                 }
-            }();
+        };
 
         switch(m_interpolation_mode){
 
@@ -301,14 +301,14 @@ public:
                 Index index = fmadd(fmadd(pi.z(), ny, pi.y()), nx, pi.x());
 
                 // Load 8 grid positions to perform trilinear interpolation
-                auto d000 = gather<StorageType>(raw_data, index, active),
-                    d001 = gather<StorageType>(raw_data, index + 1, active),
-                    d010 = gather<StorageType>(raw_data, index + nx, active),
-                    d011 = gather<StorageType>(raw_data, index + nx + 1, active),
-                    d100 = gather<StorageType>(raw_data, index + z_offset, active),
-                    d101 = gather<StorageType>(raw_data, index + z_offset + 1, active),
-                    d110 = gather<StorageType>(raw_data, index + z_offset + nx, active),
-                    d111 = gather<StorageType>(raw_data, index + z_offset + nx + 1, active);
+                auto d000 = wgather(index),
+                    d001 = wgather(index + 1),
+                    d010 = wgather(index + nx),
+                    d011 = wgather(index + nx + 1),
+                    d100 = wgather(index + z_offset),
+                    d101 = wgather(index + z_offset + 1),
+                    d110 = wgather(index + z_offset + nx),
+                    d111 = wgather(index + z_offset + nx + 1);
 
                 ResultType v000, v001, v010, v011, v100, v101, v110, v111;
                 Float scale = 1.f;
@@ -352,12 +352,12 @@ public:
                     if constexpr (!(is_monochromatic_v<Spectrum> || (Channels == 1 && Raw)))
                         NotImplementedError("eval_gradient with multichannel GridVolume texture");
 
-                        Float gx0 = fmadd(d001 - d000, rf.y(), (d011 - d010) * f.y()).x(),
-                            gx1 = fmadd(d101 - d100, rf.y(), (d111 - d110) * f.y()).x(),
-                            gy0 = fmadd(d010 - d000, rf.x(), (d011 - d001) * f.x()).x(),
-                            gy1 = fmadd(d110 - d100, rf.x(), (d111 - d101) * f.x()).x(),
-                            gz0 = fmadd(d100 - d000, rf.x(), (d101 - d001) * f.x()).x(),
-                            gz1 = fmadd(d110 - d010, rf.x(), (d111 - d011) * f.x()).x();
+                        Float gx0 = fmadd(d001 - d000, rf.y(), (d011 - d010) * f.y()),
+                            gx1 = fmadd(d101 - d100, rf.y(), (d111 - d110) * f.y()),
+                            gy0 = fmadd(d010 - d000, rf.x(), (d011 - d001) * f.x()),
+                            gy1 = fmadd(d110 - d100, rf.x(), (d111 - d101) * f.x()),
+                            gz0 = fmadd(d100 - d000, rf.x(), (d101 - d001) * f.x()),
+                            gz1 = fmadd(d110 - d010, rf.x(), (d111 - d011) * f.x());
 
                         // Smaller grid cells means variation is faster (-> larger gradient)
                         Vector3f gradient(fmadd(gx0, rf.z(), gx1 * f.z()) * (nx - 1),
@@ -392,7 +392,7 @@ public:
                 for(int y = -1; y<3; y++)
                 for(int x = -1; x<3; x++){
                     if(x==0 || x==1 || y==0 || y==1 || z==0 || z==1)
-                        voxels[z+1][y+1][x+1] = gather<Float>(raw_data, index + z*z_offset + y*nx + x, active);
+                        voxels[z+1][y+1][x+1] = wgather(index + z*z_offset + y*nx + x);
                 }
 
                 Float sample = trilinear(voxels, f, rf, 0, 0, 0);
@@ -443,7 +443,7 @@ public:
                 for(int y = -1; y < 3; y++)
                 for(int x = -1; x < 3; x++){
                     if(x==0 || x==1 || y==0 || y==1 || z==0 || z==1)
-                        vox[z+1][y+1][x+1] = gather<Float>(raw_data, index + z*z_offset + y*nx + x, active);
+                        vox[z+1][y+1][x+1] = wgather(index + z*z_offset + y*nx + x);
                 }
 
 
