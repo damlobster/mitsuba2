@@ -123,7 +123,8 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray_, Mask active) const {
             SDFPtr sdf( select(is_sdf, (SDFPtr)si.shape, nullptr) );
 
             // do sphere tracing to find SDF surface intersection
-            auto [hit_sdf, t] = sdf->ray_intersect(ray, nullptr, is_sdf);
+            auto [hit_sdf, t, sil_t, sil_d] =
+                    sdf->_ray_intersect(ray, nullptr, is_sdf);
             auto missed_sdf = is_sdf && !hit_sdf;
 
             // in case we missed the SDF surface, we should check if an another
@@ -157,6 +158,9 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray_, Mask active) const {
             ray.maxt[missed_sdf] = math::Infinity<Float>;
 
             si[missed_sdf] = ray_intersect_gpu(ray, missed_sdf);
+            si.sdf[sil_t < math::Infinity<Float>] = sdf;
+            si.sdf_t[sil_t < math::Infinity<Float>] = sil_t;
+            si.sdf_d[sil_t < math::Infinity<Float>] = sil_d;
         }
 
     } else {

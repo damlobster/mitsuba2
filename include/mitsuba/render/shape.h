@@ -15,7 +15,7 @@ NAMESPACE_BEGIN(mitsuba)
 template <typename Float, typename Spectrum>
 class MTS_EXPORT_RENDER Shape : public Object {
 public:
-    MTS_IMPORT_TYPES(BSDF, Medium, Emitter, Sensor, SDF);
+    MTS_IMPORT_TYPES(BSDF, Medium, Emitter, Sensor);
 
     // Use 32 bit indices to keep track of indices to conserve memory
     using ScalarIndex = uint32_t;

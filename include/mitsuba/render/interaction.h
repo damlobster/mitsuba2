@@ -125,6 +125,10 @@ struct SurfaceInteraction : Interaction<Float_, Spectrum_> {
     /// Stores a pointer to the parent instance (if applicable)
     ShapePtr instance = nullptr;
 
+    ShapePtr sdf = nullptr;
+    Float sdf_t;
+    Float sdf_d;
+
     //! @}
     // =============================================================
 
@@ -343,7 +347,8 @@ struct SurfaceInteraction : Interaction<Float_, Spectrum_> {
     ENOKI_DERIVED_STRUCT(SurfaceInteraction, Base,
         ENOKI_BASE_FIELDS(t, time, wavelengths, p),
         ENOKI_DERIVED_FIELDS(shape, uv, n, sh_frame, dp_du, dp_dv,
-                             duv_dx, duv_dy, wi, prim_index, instance)
+                             duv_dx, duv_dy, wi, prim_index, instance,
+                             sdf, sdf_t, sdf_d)
     )
 };
 
@@ -487,7 +492,7 @@ ENOKI_STRUCT_SUPPORT(mitsuba::Interaction, t, time, wavelengths, p)
 
 ENOKI_STRUCT_SUPPORT(mitsuba::SurfaceInteraction, t, time, wavelengths, p,
                      shape, uv, n, sh_frame, dp_du, dp_dv, duv_dx, duv_dy, wi,
-                     prim_index, instance)
+                     prim_index, instance, sdf, sdf_t, sdf_d)
 
 ENOKI_STRUCT_SUPPORT(mitsuba::MediumInteraction, t, time, wavelengths, p,
                      medium, sh_frame, wi, sigma_s, sigma_n, sigma_t, combined_extinction, mint)

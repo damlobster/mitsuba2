@@ -20,8 +20,8 @@ MTS_VARIANT SDF<Float, Spectrum>::SDF(const Properties &props) : Base(props) {
 
 MTS_VARIANT SDF<Float, Spectrum>::~SDF() {}
 
-MTS_VARIANT std::pair<typename SDF<Float, Spectrum>::Mask, Float>
-SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float* cache, Mask active) const {
+MTS_VARIANT std::tuple<typename SDF<Float, Spectrum>::Mask, Float, Float, Float>
+SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float* cache, Mask active) const {
     ENOKI_MARK_USED(cache);
     // Taken from Keinert, B. et al. (2014). Enhanced Sphere Tracing.
 
@@ -37,7 +37,7 @@ SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float* cache, Mask active)
     active &= valid && mint <= ray.maxt && maxt > ray.mint;
 
     if(none_or<false>(active))
-        return { active, maxt };
+        return { active, maxt, math::Infinity<Float>, math::Infinity<Float> };
 
     Interaction3f it(mint, ray.time, ray.wavelengths, ray(mint));
     const ScalarFloat epsilon = math::RayEpsilon<Float>/2;
@@ -48,11 +48,19 @@ SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float* cache, Mask active)
     Float stepLength = 0;
     const Float functionSign = sign(distance(it, active));
 
+    Float silhouette_dist = math::Infinity<Float>;
+    Float silhouette_t = math::Infinity<Float>;
+
     for (int i = 0; i < m_sphere_tracing_steps; ++i) {
 
         Float dist = distance(it, active);
         Float signedRadius = functionSign * dist;
         Float radius = abs(signedRadius);
+
+        auto silhouette = active && radius > previousRadius && previousRadius < silhouette_dist;
+        masked(silhouette_dist, silhouette) = previousRadius;
+        masked(silhouette_t, silhouette) = it.t;
+
 
         Mask sorFail = omega > 1 && (radius + previousRadius) < stepLength;
 
@@ -82,7 +90,10 @@ SDF<Float, Spectrum>::ray_intersect(const Ray3f &ray, Float* cache, Mask active)
 
     Mask missed = (candidate_t > ray.maxt || candidate_error > epsilon); // && !forceHit;
 
-    return { !missed, select(!missed, candidate_t, maxt) };
+    auto silhouette = silhouette_dist < 1000 * math::RayEpsilon<Float>;
+    return { !missed, select(!missed, candidate_t, maxt),
+              select(silhouette, silhouette_t, math::Infinity<Float>),
+              select(silhouette, silhouette_dist, math::Infinity<Float>) };
 }
 
 MTS_VARIANT void SDF<Float, Spectrum>::initialize_mesh_vertices() {

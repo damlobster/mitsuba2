@@ -50,7 +50,13 @@ public:
                                           Mask active = true) const = 0;
 
     virtual std::pair<Mask, Float>
-    ray_intersect(const Ray3f &ray, Float *cache, Mask active) const override;
+    ray_intersect(const Ray3f &ray, Float *cache, Mask active) const override {
+        auto [hit, t, u1, u2] = _ray_intersect(ray, cache, active);
+        return { hit, t };
+    };
+
+    virtual std::tuple<Mask, Float, Float, Float>
+    _ray_intersect(const Ray3f &ray, Float *cache, Mask active) const;
 
 #if defined(MTS_ENABLE_OPTIX)
     virtual void traverse(TraversalCallback *callback) override;
@@ -84,6 +90,7 @@ ENOKI_CALL_SUPPORT_TEMPLATE_BEGIN(mitsuba::SDF)
     ENOKI_CALL_SUPPORT_METHOD(fill_surface_interaction)
     ENOKI_CALL_SUPPORT_METHOD(_fill_surface_interaction)
     ENOKI_CALL_SUPPORT_METHOD(ray_intersect)
+    ENOKI_CALL_SUPPORT_METHOD(_ray_intersect)
 ENOKI_CALL_SUPPORT_TEMPLATE_END(mitsuba::SDF)
 
 //! @}
