@@ -43,29 +43,29 @@ public:
     }
 
     SurfaceInteraction3f _fill_surface_interaction(const Ray3f &ray, const Float * /*cache*/,
-                                  const SurfaceInteraction3f &si_out, Mask active) const override {
+                                  SurfaceInteraction3f si, Mask active) const override {
         MTS_MASK_ARGUMENT(active);
-
-        SurfaceInteraction3f si(si_out);
 
         si.p = ray(si.t);
 
         auto [d, n] = m_distance_field->eval_gradient(si, active);
 
-        si.p = fmadd(ray.d, d, si.p);
+        si.p[active] = fmadd((si.t + d), ray.d, ray.o);
 
-        si.sh_frame.n = n;
+        masked(si.t, active) = norm(si.p - ray.o);
+
+        si.sh_frame.n[active] = n;
         auto [dp_du, dp_dv] = coordinate_system(n);
-        si.dp_du = dp_du;
-        si.dp_dv = dp_dv;
+        si.dp_du[active] = dp_du;
+        si.dp_dv[active] = dp_dv;
 
-        si.n = n;
-        si.time = ray.time;
+        si.n[active] = n;
+        masked(si.time, active) = ray.time;
 
-        si.wi = select(active, si.to_local(-ray.d), -ray.d);
+        si.wi[active] = si.to_local(-ray.d);
 
-        si.shape = this;
-        si.prim_index = 0;
+        masked(si.shape, active) = this;
+        masked(si.prim_index, active) = 0;
 
         return si;
 

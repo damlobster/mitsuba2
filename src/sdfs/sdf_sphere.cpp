@@ -63,11 +63,9 @@ public:
         return select(active, norm(it.p - m_center) - m_radius, math::Infinity<Float>);
     }
 
-    void fill_surface_interaction(const Ray3f &ray, const Float * /*cache*/,
-                                  SurfaceInteraction3f &si_out, Mask active) const override {
+    SurfaceInteraction3f _fill_surface_interaction(const Ray3f &ray, const Float * /*cache*/,
+                                  SurfaceInteraction3f si, Mask active) const override {
         MTS_MASK_ARGUMENT(active);
-
-        SurfaceInteraction3f si(si_out);
 
         si.p = ray(si.t);
         si.p = fmadd(ray.d, distance(si, active), si.p);
@@ -84,7 +82,7 @@ public:
 
         si.wi = select(active, si.to_local(-ray.d), -ray.d);
 
-        si_out[active] = si;
+        return si;
     }
 
     //! @}

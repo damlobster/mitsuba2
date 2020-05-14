@@ -46,7 +46,7 @@ public:
 
     virtual SurfaceInteraction3f _fill_surface_interaction(const Ray3f &ray,
                                           const Float* /**/,
-                                          const SurfaceInteraction3f &si,
+                                          SurfaceInteraction3f si,
                                           Mask active = true) const = 0;
 
     virtual std::pair<Mask, Float>
