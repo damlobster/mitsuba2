@@ -21,7 +21,7 @@ MTS_VARIANT SDF<Float, Spectrum>::SDF(const Properties &props) : Base(props) {
 MTS_VARIANT SDF<Float, Spectrum>::~SDF() {}
 
 MTS_VARIANT std::tuple<typename SDF<Float, Spectrum>::Mask, Float, Float, Float>
-SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float* cache, Mask active) const {
+SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float delta, Float* cache, Mask active) const {
     ENOKI_MARK_USED(cache);
     // Taken from Keinert, B. et al. (2014). Enhanced Sphere Tracing.
 
@@ -90,10 +90,7 @@ SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float* cache, Mask active
 
     Mask missed = (candidate_t > ray.maxt || candidate_error > epsilon); // && !forceHit;
 
-    auto silhouette = silhouette_dist < 1000 * math::RayEpsilon<Float>;
-    return { !missed, select(!missed, candidate_t, maxt),
-              select(silhouette, silhouette_t, math::Infinity<Float>),
-              select(silhouette, silhouette_dist, math::Infinity<Float>) };
+    return { !missed, select(!missed, candidate_t, maxt), silhouette_t, silhouette_dist };
 }
 
 MTS_VARIANT void SDF<Float, Spectrum>::initialize_mesh_vertices() {

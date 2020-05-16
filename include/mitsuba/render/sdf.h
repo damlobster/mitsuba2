@@ -51,12 +51,12 @@ public:
 
     virtual std::pair<Mask, Float>
     ray_intersect(const Ray3f &ray, Float *cache, Mask active) const override {
-        auto [hit, t, u1, u2] = _ray_intersect(ray, cache, active);
+        auto [hit, t, u1, u2] = _ray_intersect(ray, 0.0f, cache, active);
         return { hit, t };
     };
 
     virtual std::tuple<Mask, Float, Float, Float>
-    _ray_intersect(const Ray3f &ray, Float *cache, Mask active) const;
+    _ray_intersect(const Ray3f &ray, Float delta, Float *cache, Mask active) const;
 
 #if defined(MTS_ENABLE_OPTIX)
     virtual void traverse(TraversalCallback *callback) override;
