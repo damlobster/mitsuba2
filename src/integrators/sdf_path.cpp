@@ -6,6 +6,7 @@
 #include <mitsuba/render/emitter.h>
 #include <mitsuba/render/integrator.h>
 #include <mitsuba/render/records.h>
+#include <mitsuba/render/sdf.h>
 
 NAMESPACE_BEGIN(mitsuba)
 
@@ -93,9 +94,11 @@ template <typename Float, typename Spectrum>
 class SDFPathIntegrator : public MonteCarloIntegrator<Float, Spectrum> {
 public:
     MTS_IMPORT_BASE(MonteCarloIntegrator, m_max_depth, m_rr_depth)
-    MTS_IMPORT_TYPES(Scene, Sampler, Medium, Emitter, EmitterPtr, BSDF, BSDFPtr, SDFPtr)
+    MTS_IMPORT_TYPES(Scene, Sampler, Medium, Emitter, EmitterPtr, BSDF, BSDFPtr, SDF, SDFPtr)
 
-    SDFPathIntegrator(const Properties &props) : Base(props) { }
+    SDFPathIntegrator(const Properties &props) : Base(props) {
+        m_sdf_emitter_samples = props.int_("sdf_emitter_samples", 1);
+    }
 
     std::pair<Spectrum, Mask> sample(const Scene *scene,
                                      Sampler *sampler,
@@ -119,14 +122,23 @@ public:
         SurfaceInteraction3f si = scene->ray_intersect(ray, active);
         Mask valid_ray = si.is_valid();
         EmitterPtr emitter = si.emitter(scene);
-        SDFPtr sdf = si.sdf;
+
+        const ScalarFloat delta = 1.0f / 16.0f; // <-- FIXME
 
         for (int depth = 1;; ++depth) {
 
             // ---------------- Intersection with emitters ----------------
 
-            if (any_or<true>(neq(emitter, nullptr)))
-                result[active] += emission_weight * throughput * emitter->eval(si, active);
+            auto hit_emitter = active && neq(emitter, nullptr);
+            if (any_or<true>(hit_emitter))
+                result[hit_emitter] += emission_weight * throughput * emitter->eval(si, hit_emitter);
+
+            auto [silhouette_result, sdf_d, silhouette_hit] = sample_sdf_silhouette(scene, sampler, ray, delta, si, active);
+            auto weight = select(hit_emitter, emission_weight, 1.0f);
+            result[silhouette_hit] = (weight * throughput * silhouette_result - result) / delta; // should weight by 0.5 ?
+            //result[silhouette_hit] /= 2.0f; // should weight by 0.5 ?
+
+
 
             active &= si.is_valid();
 
@@ -156,8 +168,17 @@ public:
 
             if (likely(any_or<true>(active_e))) {
                 auto [ds, emitter_val] = scene->sample_emitter_direction(
-                    si, sampler->next_2d(active_e), true, active_e);
+                    si, sampler->next_2d(active_e), false, active_e); // <-- false because we want to detect SDF silhouette
                 active_e &= neq(ds.pdf, 0.f);
+
+                Ray3f ray_e(si.p, ds.d, math::RayEpsilon<Float> * (1.f + hmax(abs(si.p))),
+                      ds.dist * (1.f - math::ShadowEpsilon<Float>), si.time, si.wavelengths);
+
+                SurfaceInteraction3f si_e = scene->ray_intersect(ray_e, active_e);
+                auto [silhouette_result, sdf_d, silhouette_hit] = sample_sdf_silhouette(scene, sampler, ray_e, delta, si_e, active);
+                result[silhouette_hit] = (throughput * silhouette_result - result) / delta; // should weight by 0.5 ?
+                //result[silhouette_hit] /= 2.0f; // should weight by 0.5 ?
+
 
                 // Query the BSDF for that emitter-sampled direction
                 Vector3f wo = si.to_local(ds.d);
@@ -225,19 +246,88 @@ public:
         return select(pdf_a > 0.f, pdf_a / (pdf_a + pdf_b), 0.f);
     }
 
-protected:
-    std::pair<Spectrum, Mask> sample_sdf_silhouette(const Scene* scene, Sampler* sampler, const Ray3f& ray_,
-                                                    const Float delta, const SurfaceInteraction3f& si, Mask active) {
-        //
-        SDFPtr sdf = (SDF) si.sdf;
-        Ray3f ray(ray_);
-        ray.o = ray(si.sdf_t - delta);
-        ray.t = 0.0f;
-        auto [hit, t, u1, u2] = sdf->_ray_intersect(ray, delta, nullptr, neq(sdf, nullptr));
-        auto si_sil = sdf->_fill_surface_interaction()
+private:
+    ScalarInt32 m_sdf_emitter_samples;
 
-        return { 0.0f, false };
+    std::tuple<Spectrum, Float, Mask> sample_sdf_silhouette(const Scene* scene, Sampler* sampler, const Ray3f& ray_,
+                                                    const Float delta, const SurfaceInteraction3f& si_, Mask active) const {
+        //
+        SurfaceInteraction3f si(si_);
+        Ray3f ray(ray_);
+        SDFPtr sdf = (SDFPtr) si.sdf;
+
+        auto active_sil = active && neq(sdf, nullptr) && si.sdf_d <= delta;
+
+        // Log(Warn, "%s, %s %s", count(active_sil), count(si.sdf_d <= delta), hsum(si.sdf_d) / 131072);
+        //ray.d = rotation_matrix.transtorm_affine(nomralize(si.p - ray.o))
+        ray.o = ray(si.sdf_t - delta);
+        ray.mint = 0.0f;
+        ray.maxt -= si.sdf_t - delta;
+        auto [hit, t, u1, u2] = sdf->_ray_intersect(ray, delta, nullptr, active_sil && neq(sdf, nullptr));
+        si.t = t;
+        si = sdf->_fill_surface_interaction(ray, delta, nullptr, si, hit);
+
+        Point3f sdf_true_p = si.p - delta * si.n;
+        auto rotation = rotation_matrix(ray, sdf_true_p);
+        Vector3f dir = normalize(si.p - ray.o);
+        si.wi[active_sil] = -si.to_local(rotation.transform_affine(detach(dir)));
+
+        BSDFContext ctx;
+        BSDFPtr bsdf = si.bsdf(ray);
+        Mask active_e = hit && has_flag(bsdf->flags(), BSDFFlags::Smooth);
+
+        Spectrum result(0.0f);
+        Mask valid = false;
+
+        if (likely(any_or<true>(active_e))) {
+            for(int i = 0; i < m_sdf_emitter_samples; ++i){
+                auto [ds, emitter_val] = scene->sample_emitter_direction(
+                    si, sampler->next_2d(active_e), false, active_e);
+                active_e &= neq(ds.pdf, 0.f);
+                valid |= active_e;
+
+                // Query the BSDF for that emitter-sampled direction
+                Vector3f wo = si.to_local(ds.d);
+                Spectrum bsdf_val = bsdf->eval(ctx, si, wo, active_e);
+                bsdf_val = si.to_world_mueller(bsdf_val, -wo, si.wi);
+
+                // Determine density of sampling that same direction using BSDF sampling
+                Float bsdf_pdf = bsdf->pdf(ctx, si, wo, active_e);
+
+                Float mis = select(ds.delta, 1.f, mis_weight(ds.pdf, bsdf_pdf));
+                masked(result, active_e) += mis * bsdf_val * emitter_val;
+            }
+        }
+
+        return { result / m_sdf_emitter_samples, si.sdf_d, active_e };
     }
+
+    Transform<Vector4f> rotation_matrix(const Ray3f& ray, Point3f true_sdf) const {
+        Vector3f sdf_dir = normalize(true_sdf - ray.o);
+        // Vector3f axis = cross(ray.d, sdf_dir); // TODO check if args order is correct
+        // Float cosangle = dot(sdf_dir, ray.d);  // TODO check if args order is correct
+        Vector3f axis = cross(sdf_dir, ray.d); // TODO check if args order is correct
+        Float cosangle = dot(ray.d, sdf_dir);  // TODO check if args order is correct
+
+        Float ax = axis.x(),
+              ay = axis.y(),
+              az = axis.z();
+        Float axy = ax * ay,
+              axz = ax * az,
+              ayz = ay * az;
+
+        Matrix3f ux(0.f, -az,  ay,
+                     az, 0.f, -ax,
+                    -ay,  ax, 0.f);
+
+        Matrix3f uu(sqr(ax),     axy,    axz,
+                        axy, sqr(ay),    ayz,
+                        axz,     ayz, sqr(az));
+
+        Matrix3f R = identity<Matrix3f>() * cosangle + ux + rcp(1 + cosangle) * uu;
+
+        return Transform<Vector4f>(Matrix4f(R));
+    };
 
     MTS_DECLARE_CLASS()
 };

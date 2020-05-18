@@ -46,21 +46,25 @@ SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float delta, Float* cache
     Float candidate_t = mint;
     Float previousRadius = 0;
     Float stepLength = 0;
-    const Float functionSign = sign(distance(it, active));
+    auto d = distance(it, active);
+    const Float functionSign = sign(d);
+
+    Mask active_sil = d > 10*math::RayEpsilon<Float>;
 
     Float silhouette_dist = math::Infinity<Float>;
     Float silhouette_t = math::Infinity<Float>;
 
     for (int i = 0; i < m_sphere_tracing_steps; ++i) {
 
-        Float dist = distance(it, active);
+        Float dist = distance(it, active) - delta;
         Float signedRadius = functionSign * dist;
         Float radius = abs(signedRadius);
 
-        auto silhouette = active && radius > previousRadius && previousRadius < silhouette_dist;
+        auto silhouette = active && active_sil && radius < 0.25f/16 && radius > previousRadius && previousRadius < silhouette_dist;
         masked(silhouette_dist, silhouette) = previousRadius;
         masked(silhouette_t, silhouette) = it.t;
 
+        // Log(Warn, "%s", silhouette_dist);
 
         Mask sorFail = omega > 1 && (radius + previousRadius) < stepLength;
 

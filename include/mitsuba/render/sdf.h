@@ -40,12 +40,13 @@ public:
                                           const Float* /**/,
                                           SurfaceInteraction3f &si,
                                           Mask active = true) const override {
-        auto si_ = _fill_surface_interaction(ray, nullptr, si, active);
+        auto si_ = _fill_surface_interaction(ray, 0.0f, nullptr, si, active);
         si[active] = si_;
     };
 
     virtual SurfaceInteraction3f _fill_surface_interaction(const Ray3f &ray,
-                                          const Float* /**/,
+                                const Float delta,
+                                const Float* /*cache*/,
                                           SurfaceInteraction3f si,
                                           Mask active = true) const = 0;
 

@@ -124,7 +124,7 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray_, Mask active) const {
 
             // do sphere tracing to find SDF surface intersection
             auto [hit_sdf, t, sil_t, sil_d] =
-                    sdf->_ray_intersect(ray, nullptr, is_sdf);
+                    sdf->_ray_intersect(ray, 0.0f, nullptr, is_sdf);
             auto missed_sdf = is_sdf && !hit_sdf;
 
             // in case we missed the SDF surface, we should check if an another
@@ -144,7 +144,7 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray_, Mask active) const {
             // ask the SDF to fill the surface intersection
             SurfaceInteraction3f si_(si);
             si_.t[hit_sdf] = t;
-            si_ = sdf->_fill_surface_interaction(ray, nullptr, si_, hit_sdf);
+            si_ = sdf->_fill_surface_interaction(ray, 0.0f, nullptr, si_, hit_sdf);
 
             si_.sh_frame.s = normalize(
                 fnmadd(si_.sh_frame.n, dot(si_.sh_frame.n, si_.dp_du), si_.dp_du));
@@ -158,9 +158,13 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray_, Mask active) const {
             ray.maxt[missed_sdf] = math::Infinity<Float>;
 
             si[missed_sdf] = ray_intersect_gpu(ray, missed_sdf);
-            si.sdf[sil_t < math::Infinity<Float>] = sdf;
-            si.sdf_t[sil_t < math::Infinity<Float>] = sil_t;
-            si.sdf_d[sil_t < math::Infinity<Float>] = sil_d;
+
+            Mask has_sil = sil_t < math::Infinity<Float>;
+            si.sdf = select(has_sil, sdf, nullptr);;
+            si.sdf_t = select(has_sil, sil_t, math::Infinity<ScalarFloat>);
+            si.sdf_d = select(has_sil, sil_d, math::Infinity<ScalarFloat>);
+
+            //Log(Warn, "%s %s %s", count(sil_t < math::Infinity<Float>), hsum(sil_t) / 131072, hsum(sil_d) / 131072);
         }
 
     } else {

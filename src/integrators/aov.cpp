@@ -77,6 +77,8 @@ public:
         dPdV,
         dUVdx,
         dUVdy,
+        SdfT,
+        SdfD,
         IntegratorRGBA
     };
 
@@ -129,13 +131,24 @@ public:
                 m_aov_types.push_back(Type::dUVdy);
                 m_aov_names.push_back(item[0] + ".U");
                 m_aov_names.push_back(item[0] + ".V");
+            } else if (item[1] == "sdf_d") {
+                m_aov_types.push_back(Type::SdfD);
+                m_aov_names.push_back(item[0] + ".D");
+            } else if (item[1] == "sdf_t") {
+                m_aov_types.push_back(Type::SdfT);
+                m_aov_names.push_back(item[0] + ".T");
             } else {
                 Throw("Invalid AOV type \"%s\"!", item[1]);
             }
         }
 
+        //Log(Warn, "%s", m_aov_types);
+        Log(Warn, "%s", m_aov_names);
+
         for (auto &kv : props.objects()) {
+            Log(Warn, "%s", kv.first);
             Base *integrator = dynamic_cast<Base *>(kv.second.get());
+            Log(Warn, "foobar");
             if (!integrator)
                 Throw("Child objects must be of type 'SamplingIntegrator'!");
             m_aov_types.push_back(Type::IntegratorRGBA);
@@ -217,6 +230,14 @@ public:
                 case Type::dUVdy:
                     *aovs++ = si.duv_dy.x();
                     *aovs++ = si.duv_dy.y();
+                    break;
+
+                case Type::SdfD:
+                    *aovs++ = select(neq(si.sdf, nullptr), si.sdf_d, 0.0f);
+                    break;
+
+                case Type::SdfT:
+                    *aovs++ = select(neq(si.sdf, nullptr), si.sdf_t, 0.0f);
                     break;
 
                 case Type::IntegratorRGBA: {
