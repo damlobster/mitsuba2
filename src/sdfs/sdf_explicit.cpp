@@ -35,10 +35,12 @@ public:
 
     Float distance(const Interaction3f &it, Mask active) const override {
         MTS_MASK_ARGUMENT(active);
+        const ScalarFloat bbox_step = hmax(m_distance_field->bbox().extents() /
+                                                  m_distance_field->resolution());
 
         Mask inside = m_bbox.contains(it.p);
         Float d = m_distance_field->eval_1(it, active && inside);
-        masked(d, active && !inside) = m_bbox.distance(it.p);
+        masked(d, active && !inside) = m_bbox.distance(it.p) + bbox_step;
         return d;
     }
 
@@ -50,16 +52,26 @@ public:
 
         auto [d, n] = m_distance_field->eval_gradient(si, active);
 
+        Normal3f n_detach = detach(n);
+
+        // detach normals for silhouette edges
+        n = select(delta == 0.0f, n, n_detach);
+        //d = select(delta > 0.0f, d, detach(d));
+
         si.p[active] = fmadd(si.t + d - delta, ray.d, ray.o);
+        si.n[active] = n;
 
         masked(si.t, active) = norm(si.p - ray.o);
 
-        si.sh_frame.n[active] = n;
-        auto [dp_du, dp_dv] = coordinate_system(n);
+        auto [dp_du, dp_dv] = coordinate_system(n_detach);
         si.dp_du[active] = dp_du;
         si.dp_dv[active] = dp_dv;
+        si.sh_frame.n[active] = n;
 
-        si.n[active] = n;
+        si.sh_frame.s = normalize(
+                fnmadd(n_detach, dot(n_detach, si.dp_du), si.dp_du));
+        si.sh_frame.t = cross(n_detach, si.sh_frame.s);
+
         masked(si.time, active) = ray.time;
 
         si.wi[active] = si.to_local(-ray.d);
@@ -98,6 +110,12 @@ public:
     }
 
     MTS_DECLARE_CLASS()
+
+protected:
+    ScalarFloat max_silhouette_delta() const override {
+        return hmax(0.5f * m_distance_field->bbox().extents() / m_distance_field->resolution());
+    }
+
 private:
     ref<Volume<Float, Spectrum>> m_distance_field;
     //ScalarBoundingBox3f m_bbox;

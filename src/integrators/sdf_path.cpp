@@ -116,16 +116,20 @@ public:
         // MIS weight for intersected emitters (set by prev. iteration)
         Float emission_weight(1.f);
 
-        Spectrum throughput(1.f), result(0.f);
+        Spectrum throughput(1.f), result(0.f), result_sil(0.0f);
 
         // ---------------------- First intersection ----------------------
         SurfaceInteraction3f si = scene->ray_intersect(ray, active);
         Mask valid_ray = si.is_valid();
         EmitterPtr emitter = si.emitter(scene);
 
-        const ScalarFloat delta = 1.0f / 16.0f; // <-- FIXME
+        const ScalarFloat sil_angle = tan(0.5f * math::Pi<ScalarFloat> / 180.0f);
+        //const ScalarFloat delta = 1.0f / (4.0f * 16); // <-- FIXME
 
         for (int depth = 1;; ++depth) {
+
+            // auto [silhouette_result, sdf_d, silhouette_hit] = sample_sdf_silhouette(scene, sampler, ray, delta, si, active);
+            // result[silhouette_hit] += emission_weight * throughput * silhouette_result;
 
             // ---------------- Intersection with emitters ----------------
 
@@ -133,13 +137,9 @@ public:
             if (any_or<true>(hit_emitter))
                 result[hit_emitter] += emission_weight * throughput * emitter->eval(si, hit_emitter);
 
-            auto [silhouette_result, sdf_d, silhouette_hit] = sample_sdf_silhouette(scene, sampler, ray, delta, si, active);
+            auto [silhouette_result, sdf_d, silhouette_hit] = sample_sdf_silhouette(scene, sampler, ray, sil_angle, si, active);
             auto weight = select(hit_emitter, emission_weight, 1.0f);
-            result[silhouette_hit] = (weight * throughput * silhouette_result - result) / delta; // should weight by 0.5 ?
-            //result[silhouette_hit] /= 2.0f; // should weight by 0.5 ?
-
-
-
+            result_sil[silhouette_hit] += weight * throughput * silhouette_result;
             active &= si.is_valid();
 
             /* Russian roulette: try to keep path weights equal to one,
@@ -171,14 +171,11 @@ public:
                     si, sampler->next_2d(active_e), false, active_e); // <-- false because we want to detect SDF silhouette
                 active_e &= neq(ds.pdf, 0.f);
 
+                // manually test emitter visibility to be able to detect silhouette
                 Ray3f ray_e(si.p, ds.d, math::RayEpsilon<Float> * (1.f + hmax(abs(si.p))),
                       ds.dist * (1.f - math::ShadowEpsilon<Float>), si.time, si.wavelengths);
-
                 SurfaceInteraction3f si_e = scene->ray_intersect(ray_e, active_e);
-                auto [silhouette_result, sdf_d, silhouette_hit] = sample_sdf_silhouette(scene, sampler, ray_e, delta, si_e, active);
-                result[silhouette_hit] = (throughput * silhouette_result - result) / delta; // should weight by 0.5 ?
-                //result[silhouette_hit] /= 2.0f; // should weight by 0.5 ?
-
+                emitter_val[si_e.t < ray_e.maxt] = 0.0f;
 
                 // Query the BSDF for that emitter-sampled direction
                 Vector3f wo = si.to_local(ds.d);
@@ -190,6 +187,9 @@ public:
 
                 Float mis = select(ds.delta, 1.f, mis_weight(ds.pdf, bsdf_pdf));
                 result[active_e] += mis * throughput * bsdf_val * emitter_val;
+
+                auto [silhouette_result, sdf_d, silhouette_hit] = sample_sdf_silhouette(scene, sampler, ray_e, sil_angle, si_e, active_e);
+                result_sil[silhouette_hit] += mis * throughput * silhouette_result;
             }
 
             // ----------------------- BSDF sampling ----------------------
@@ -227,7 +227,9 @@ public:
             si = std::move(si_bsdf);
         }
 
-        return { result, valid_ray };
+        //return { result, valid_ray };
+        //return { result_sil, valid_ray };
+        return { result + result_sil, valid_ray };
     }
 
     //! @}
@@ -250,13 +252,15 @@ private:
     ScalarInt32 m_sdf_emitter_samples;
 
     std::tuple<Spectrum, Float, Mask> sample_sdf_silhouette(const Scene* scene, Sampler* sampler, const Ray3f& ray_,
-                                                    const Float delta, const SurfaceInteraction3f& si_, Mask active) const {
+                                                    const ScalarFloat sil_tan_angle, const SurfaceInteraction3f& si_, Mask active) const {
         //
         SurfaceInteraction3f si(si_);
         Ray3f ray(ray_);
         SDFPtr sdf = (SDFPtr) si.sdf;
 
-        auto active_sil = active && neq(sdf, nullptr) && si.sdf_d <= delta;
+        auto active_sil = active && neq(sdf, nullptr);
+        const auto delta = select(active_sil, sil_tan_angle * si.sdf_t, 0.0f);
+        active_sil &= si.sdf_d <= delta;
 
         // Log(Warn, "%s, %s %s", count(active_sil), count(si.sdf_d <= delta), hsum(si.sdf_d) / 131072);
         //ray.d = rotation_matrix.transtorm_affine(nomralize(si.p - ray.o))
@@ -274,7 +278,7 @@ private:
 
         BSDFContext ctx;
         BSDFPtr bsdf = si.bsdf(ray);
-        Mask active_e = hit && has_flag(bsdf->flags(), BSDFFlags::Smooth);
+        Mask active_e = active_sil && has_flag(bsdf->flags(), BSDFFlags::Smooth);
 
         Spectrum result(0.0f);
         Mask valid = false;

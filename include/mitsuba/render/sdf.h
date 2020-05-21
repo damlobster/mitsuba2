@@ -73,6 +73,8 @@ protected:
 
     void initialize_mesh_vertices();
 
+    virtual ScalarFloat max_silhouette_delta() const { return ScalarFloat(1.0f / 20.0f); };
+
     MTS_DECLARE_CLASS()
 protected:
     ScalarInt32 m_sphere_tracing_steps;

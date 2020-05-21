@@ -146,10 +146,6 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray_, Mask active) const {
             si_.t[hit_sdf] = t;
             si_ = sdf->_fill_surface_interaction(ray, 0.0f, nullptr, si_, hit_sdf);
 
-            si_.sh_frame.s = normalize(
-                fnmadd(si_.sh_frame.n, dot(si_.sh_frame.n, si_.dp_du), si_.dp_du));
-            si_.sh_frame.t = cross(si_.sh_frame.n, si_.sh_frame.s);
-
             si[hit_sdf] = si_;
 
             // continue the ray after the SDF bounding mesh
