@@ -52,7 +52,9 @@ public:
 
         auto [d, n] = m_distance_field->eval_gradient(si, active);
 
-        Normal3f n_detach = detach(n);
+        //n = detach(n);
+
+        Normal3f &&n_detach = n; //detach(n); // TODO should the normal be detached for boundaries ?????????
 
         // detach normals for silhouette edges
         n = select(delta == 0.0f, n, n_detach);
@@ -113,7 +115,7 @@ public:
 
 protected:
     ScalarFloat max_silhouette_delta() const override {
-        return hmax(0.5f * m_distance_field->bbox().extents() / m_distance_field->resolution());
+        return hmax(0.1f * m_distance_field->bbox().extents() / m_distance_field->resolution());
     }
 
 private:

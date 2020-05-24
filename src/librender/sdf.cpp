@@ -40,7 +40,10 @@ SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float delta, Float* cache
         return { active, maxt, math::Infinity<Float>, math::Infinity<Float> };
 
     Interaction3f it(mint, ray.time, ray.wavelengths, ray(mint));
-    const ScalarFloat epsilon = math::RayEpsilon<Float>/2;
+
+    ScalarFloat max_radius = max_silhouette_delta();
+    ScalarFloat epsilon = 10*math::RayEpsilon<Float>; // TODO which one? max_radius / 20;
+
     Float omega = 1.2;
     Float candidate_error = math::Infinity<Float>;
     Float candidate_t = mint;
