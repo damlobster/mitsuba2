@@ -280,7 +280,8 @@ public:
 
         auto wgather = [&](const Index &index) {
             if constexpr (!is_diff_array_v<Index> || detached) {
-                return gather<Float>(detach(m_data), index, active);
+                //return gather<Float>(detach(m_data), index, active);
+                return gather<Float>(m_data, index, active);
             } else {
                 return gather<Float>(m_data, index, active);
                 }
