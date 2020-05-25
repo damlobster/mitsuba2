@@ -121,8 +121,8 @@ public:
             result_sil[silhouette_hit] += (silhouette_result - detach(result)) * grad_weight(sdf_d);
         }
 
-        return { result + result_sil, valid_ray };
-        // return { result_sil, valid_ray };
+        // return { result + result_sil, valid_ray };
+        return { result, valid_ray };
     }
 
     template<bool silhouette_enabled>
@@ -258,15 +258,26 @@ public:
         if constexpr(!is_diff_array_v<Float>)
             Throw("Not implemented");
 
-        const ScalarFloat sil_angle = tan(0.2f * math::Pi<ScalarFloat> / 180.f);
+        // const ScalarFloat sil_angle = tan(0.2f * math::Pi<ScalarFloat> / 180.f);
 
-        //Ray3f ray = ray_;
+        // //Ray3f ray = ray_;
+        // SurfaceInteraction3f si = si_;
+
+        // SDFPtr sdf = (SDFPtr) si.sdf;
+        // auto active_sil = active && neq(sdf, nullptr);
+        // active_sil &= si.sdf_d <= select(active_sil, sil_angle * si.sdf_t, 0.0f);
+        // auto delta = select(active_sil, si.sdf_d + 10*math::RayEpsilon<Float>, 0.0f);
+
         SurfaceInteraction3f si = si_;
 
         SDFPtr sdf = (SDFPtr) si.sdf;
         auto active_sil = active && neq(sdf, nullptr);
-        active_sil &= si.sdf_d <= select(active_sil, sil_angle * si.sdf_t, 0.0f);
-        auto delta = select(active_sil, si.sdf_d + 10*math::RayEpsilon<Float>, 0.0f);
+
+        Float delta = select(active_sil, sdf->max_silhouette_delta() + math::RayEpsilon<Float>, 0.0f);
+
+        // Log(Info, "1 %s", count(active_sil));
+        active_sil &= si.sdf_d <= delta - math::RayEpsilon<Float>;
+        // Log(Info, "2 %s", count(active_sil));
 
         //Point3f ray_o = ray.o;
         //ray.o[active_sil] = ray(si.sdf_t - delta);
@@ -303,11 +314,14 @@ public:
 
 protected:
     inline Float grad_weight(Float sdf_d) const{
-        if constexpr(is_diff_array_v<Float>)
-            return -0.5f * sdf_d / detach(sdf_d);
-            //return -sdf_d;
-        else
+        if constexpr(is_diff_array_v<Float>){
+            //return -0.5f * sdf_d / detach(sdf_d);
+            Float d_detach = detach(sdf_d);
+            // return d_detach / sdf_d;
+            return -sdf_d * d_detach;
+        } else {
             return 0.0f;
+        }
     }
 
 };

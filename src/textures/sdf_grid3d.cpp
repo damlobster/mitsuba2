@@ -277,6 +277,7 @@ public:
 
         Point3f max_coordinates(nx - 1.f, ny - 1.f, nz - 1.f);
         p *= max_coordinates;
+        Index3 pi  = enoki::floor2int<Index3>(p);
 
         auto wgather = [&](const Index &index) {
             if constexpr (!is_diff_array_v<Index> || detached) {
@@ -291,7 +292,6 @@ public:
 
             case Trilinear: {
                 // Integer part (clamped to include the upper bound)
-                Index3 pi  = enoki::floor2int<Index3>(p);
                 pi[active] = clamp(pi, 0, max_coordinates - 1);
 
                 // Fractional part
@@ -375,7 +375,6 @@ public:
                     NotImplementedError("Catmull interpolation only support 1 channel raw grids");
 
                 // Integer part (clamped to include the upper bound)
-                Index3 pi  = enoki::floor2int<Index3>(p);
                 pi[active] = clamp(pi, 1, max_coordinates - 2);
 
                 // Fractional part
@@ -426,7 +425,6 @@ public:
                     NotImplementedError("Catmull interpolation only support 1 channel raw grids");
 
                 // Integer part (clamped to include the upper bound)
-                Index3 pi  = enoki::floor2int<Index3>(p);
                 pi[active] = clamp(pi, 1, max_coordinates - 2);
 
                 // Fractional part

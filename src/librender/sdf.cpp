@@ -104,6 +104,9 @@ SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float delta, Float* cache
 
     Mask missed = (candidate_t > ray.maxt || candidate_error > epsilon); // && !forceHit;
 
+    Mask bad_sil = candidate_t - silhouette_t > max_radius;
+    masked(silhouette_dist, bad_sil) = math::Infinity<Float>;
+    masked(silhouette_t, bad_sil) = math::Infinity<Float>;
     return { !missed, select(!missed, candidate_t, maxt), silhouette_t, silhouette_dist };
 }
 

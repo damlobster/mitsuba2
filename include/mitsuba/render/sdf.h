@@ -59,6 +59,8 @@ public:
     virtual std::tuple<Mask, Float, Float, Float>
     _ray_intersect(const Ray3f &ray, Float delta, Float *cache, Mask active) const;
 
+    virtual ScalarFloat max_silhouette_delta() const { return 0.0f; };
+
 #if defined(MTS_ENABLE_OPTIX)
     virtual void traverse(TraversalCallback *callback) override;
     virtual void parameters_changed(const std::vector<std::string> &/*keys*/ = {}) override;
@@ -72,8 +74,6 @@ protected:
     virtual ~SDF();
 
     void initialize_mesh_vertices();
-
-    virtual ScalarFloat max_silhouette_delta() const { return ScalarFloat(1.0f / 20.0f); };
 
     MTS_DECLARE_CLASS()
 protected:
@@ -94,6 +94,7 @@ ENOKI_CALL_SUPPORT_TEMPLATE_BEGIN(mitsuba::SDF)
     ENOKI_CALL_SUPPORT_METHOD(_fill_surface_interaction)
     ENOKI_CALL_SUPPORT_METHOD(ray_intersect)
     ENOKI_CALL_SUPPORT_METHOD(_ray_intersect)
+    ENOKI_CALL_SUPPORT_METHOD(max_silhouette_delta)
 ENOKI_CALL_SUPPORT_TEMPLATE_END(mitsuba::SDF)
 
 //! @}

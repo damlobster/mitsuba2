@@ -16,7 +16,7 @@ NAMESPACE_BEGIN(mitsuba)
 template <typename Float, typename Spectrum>
 class SphereSDF final : public SDF<Float, Spectrum> {
 public:
-    MTS_IMPORT_BASE(SDF)
+    MTS_IMPORT_BASE(SDF, m_bbox, initialize_mesh_vertices)
     MTS_IMPORT_TYPES()
 
     SphereSDF(const Properties &props) : Base(props) {
@@ -44,6 +44,10 @@ public:
             m_radius = std::abs(m_radius);
             m_flip_normals = !m_flip_normals;
         }
+
+        m_bbox = bbox();
+
+        initialize_mesh_vertices();
     }
 
     ScalarBoundingBox3f bbox() const override {
@@ -63,12 +67,12 @@ public:
         return select(active, norm(it.p - m_center) - m_radius, math::Infinity<Float>);
     }
 
-    SurfaceInteraction3f _fill_surface_interaction(const Ray3f &ray, const Float * /*cache*/,
+    SurfaceInteraction3f _fill_surface_interaction(const Ray3f &ray, const Float delta, const Float * /*cache*/,
                                   SurfaceInteraction3f si, Mask active) const override {
         MTS_MASK_ARGUMENT(active);
 
         si.p = ray(si.t);
-        si.p = fmadd(ray.d, distance(si, active), si.p);
+        si.p = fmadd(ray.d, distance(si, active) - delta, si.p); //FIXME + delta ????
         si.sh_frame.n = normalize(si.p - m_center);
         auto [dp_du, dp_dv] = coordinate_system(si.sh_frame.n);
         si.dp_du = dp_du;
@@ -92,7 +96,7 @@ public:
     virtual void traverse(TraversalCallback *callback) override {
         callback->put_parameter("center", m_center);
         callback->put_parameter("radius", m_radius);
-        Base::traverse(callback);
+        //Base::traverse(callback);
     }
 
     virtual void parameters_changed(const std::vector<std::string> &keys) override {
