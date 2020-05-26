@@ -121,8 +121,9 @@ public:
             result_sil[silhouette_hit] += (silhouette_result - detach(result)) * grad_weight(sdf_d);
         }
 
-        // return { result + result_sil, valid_ray };
-        return { result, valid_ray };
+        return { result + result_sil, valid_ray };
+        // return { result, valid_ray };
+        // return { result_sil, valid_ray };
     }
 
     template<bool silhouette_enabled>
@@ -239,7 +240,7 @@ public:
 
         if constexpr(sil_enabled){
             auto [silhouette_result, sdf_d, silhouette_hit] = sample_silhouette(depth, scene, sampler, ray, si, throughput, eta, active);
-            res_sil[silhouette_hit] += (silhouette_result - detach(res_bsdf)) * grad_weight(sdf_d); // / detach(sdf_d);
+            res_sil[silhouette_hit] += (silhouette_result - detach(res_bsdf)) * grad_weight(sdf_d);
         }
 
         result += bsdf_val * res_bsdf;
@@ -315,10 +316,9 @@ public:
 protected:
     inline Float grad_weight(Float sdf_d) const{
         if constexpr(is_diff_array_v<Float>){
-            //return -0.5f * sdf_d / detach(sdf_d);
             Float d_detach = detach(sdf_d);
-            // return d_detach / sdf_d;
-            return -sdf_d * d_detach;
+            // return -sdf_d / d_detach;
+            return d_detach / sdf_d;
         } else {
             return 0.0f;
         }

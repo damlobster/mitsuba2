@@ -52,28 +52,19 @@ public:
 
         auto [d, n] = m_distance_field->eval_gradient(si, active);
 
-        Normal3f n_detach = detach(n); // TODO should the normal be detached for boundaries ?????????
+        Normal3f n_detach = detach(n);
 
-        //d = detach(d); // DEBUG
-        //n = n_detach; // DEBUG
-        // detach normals for silhouette edges
-        // Log(Warn, "%s", count(delta == 0.0f));
-        n = select(delta == 0.0f, n, n_detach);
-        //d = select(delta > 0.0f, d, detach(d));
+        select(delta == 0.0f, n, n_detach);
+
+        si.p[active] = fmadd(si.t + d - delta, ray.d, ray.o);
+        si.n[active] = n;
 
         masked(si.t, active) = norm(si.p - ray.o);
 
-        si.sh_frame.n[active] = n_detach;
+        si.sh_frame.n[active] = n;
         auto [dp_du, dp_dv] = coordinate_system(n_detach);
         si.dp_du[active] = dp_du;
         si.dp_dv[active] = dp_dv;
-
-        si.sh_frame.s = normalize(
-                fnmadd(n_detach, dot(n_detach, si.dp_du), si.dp_du));
-        si.sh_frame.t = cross(n_detach, si.sh_frame.s);
-
-        si.p[active] = fmadd(si.t + d - delta, ray.d, ray.o); //FIXME + delta ????
-        si.n[active] = n;
 
         masked(si.time, active) = ray.time;
         si.wi[active] = si.to_local(-ray.d);

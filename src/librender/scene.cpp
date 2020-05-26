@@ -145,6 +145,9 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray_, Mask active) const {
             SurfaceInteraction3f si_(si);
             si_.t[hit_sdf] = t;
             si_ = sdf->_fill_surface_interaction(ray, 0.0f, nullptr, si_, hit_sdf);
+            si_.sh_frame.s = normalize(
+                fnmadd(si_.sh_frame.n, dot(si_.sh_frame.n, si_.dp_du), si_.dp_du));
+            si_.sh_frame.t = cross(si_.sh_frame.n, si_.sh_frame.s);
 
             si[hit_sdf] = si_;
 
@@ -159,8 +162,6 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray_, Mask active) const {
             si.sdf = select(has_sil, sdf, nullptr);;
             si.sdf_t = select(has_sil, sil_t, math::Infinity<ScalarFloat>);
             si.sdf_d = select(has_sil, sil_d, math::Infinity<ScalarFloat>);
-
-            //Log(Warn, "%s %s %s", count(sil_t < math::Infinity<Float>), hsum(sil_t) / 131072, hsum(sil_d) / 131072);
         }
 
     } else {
