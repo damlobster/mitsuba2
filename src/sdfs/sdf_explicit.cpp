@@ -51,20 +51,23 @@ public:
         si.p = ray(si.t);
 
         auto [d, n] = m_distance_field->eval_gradient(si, active);
-
         Normal3f n_detach = detach(n);
+
+        d = (d - delta) / select(delta == 0.0f, max(dot(ray.d, -n_detach), 0.01f), 1.0f);
 
         select(delta == 0.0f, n, n_detach);
 
-        si.p[active] = fmadd(si.t + d - delta, ray.d, ray.o);
+        si.p[active] = fmadd(si.t + d, ray.d, ray.o);
         si.n[active] = n;
 
         masked(si.t, active) = norm(si.p - ray.o);
 
-        si.sh_frame.n[active] = n;
         auto [dp_du, dp_dv] = coordinate_system(n_detach);
         si.dp_du[active] = dp_du;
         si.dp_dv[active] = dp_dv;
+        si.sh_frame.n[active] = n;
+        si.sh_frame.s[active] = dp_du;
+        si.sh_frame.t[active] = dp_dv;
 
         masked(si.time, active) = ray.time;
         si.wi[active] = si.to_local(-ray.d);
