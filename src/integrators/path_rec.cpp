@@ -232,7 +232,6 @@ public:
 
             Float emission_weight = mis_weight(bs.pdf, emitter_pdf);
             masked(res_bsdf, active) += emission_weight * emitter->eval(si_bsdf, active);
-            //result[active] += emission_weight * bsdf_val * emitter->eval(si_bsdf, active);
         }
 
         auto [res, res_sil] = sample_rec<sil_enabled>(depth+1, scene, sampler, ray, si_bsdf, throughput, eta, active);
@@ -259,16 +258,6 @@ public:
         if constexpr(!is_diff_array_v<Float>)
             Throw("Not implemented");
 
-        // const ScalarFloat sil_angle = tan(0.2f * math::Pi<ScalarFloat> / 180.f);
-
-        // //Ray3f ray = ray_;
-        // SurfaceInteraction3f si = si_;
-
-        // SDFPtr sdf = (SDFPtr) si.sdf;
-        // auto active_sil = active && neq(sdf, nullptr);
-        // active_sil &= si.sdf_d <= select(active_sil, sil_angle * si.sdf_t, 0.0f);
-        // auto delta = select(active_sil, si.sdf_d + 10*math::RayEpsilon<Float>, 0.0f);
-
         SurfaceInteraction3f si = si_;
 
         SDFPtr sdf = (SDFPtr) si.sdf;
@@ -276,18 +265,10 @@ public:
 
         Float delta = select(active_sil, sdf->max_silhouette_delta() + math::RayEpsilon<Float>, 0.0f);
 
-        // Log(Info, "1 %s", count(active_sil));
         active_sil &= si.sdf_d <= delta - math::RayEpsilon<Float>;
-        // Log(Info, "2 %s", count(active_sil));
 
-        //Point3f ray_o = ray.o;
-        //ray.o[active_sil] = ray(si.sdf_t - delta);
-        //masked(ray.mint, active_sil) = 0.0f;
-        //masked(ray.maxt, active_sil) -= si.sdf_t - delta;
         auto [hit, t, u1, u2] = sdf->_ray_intersect(ray, delta, nullptr, active_sil);
-        //masked(si.t, hit) = si.sdf_t - delta + t;
         masked(si.t, hit) = t;
-        //ray.o[active_sil] = ray_o;
         si = sdf->_fill_surface_interaction(ray, delta, nullptr, si, hit);
 
         auto [result, unused] = sample_rec<false>(depth, scene, sampler, ray, si, throughput, eta, hit);
@@ -317,8 +298,8 @@ protected:
     inline Float grad_weight(Float sdf_d) const{
         if constexpr(is_diff_array_v<Float>){
             Float d_detach = detach(sdf_d);
-            // return -sdf_d / d_detach;
-            return d_detach / sdf_d;
+            return -sdf_d / d_detach;
+            // return d_detach / sdf_d;
         } else {
             return 0.0f;
         }
