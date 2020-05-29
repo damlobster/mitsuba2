@@ -142,13 +142,8 @@ public:
             }
         }
 
-        //Log(Warn, "%s", m_aov_types);
-        Log(Warn, "%s", m_aov_names);
-
         for (auto &kv : props.objects()) {
-            Log(Warn, "%s", kv.first);
             Base *integrator = dynamic_cast<Base *>(kv.second.get());
-            Log(Warn, "foobar");
             if (!integrator)
                 Throw("Child objects must be of type 'SamplingIntegrator'!");
             m_aov_types.push_back(Type::IntegratorRGBA);
