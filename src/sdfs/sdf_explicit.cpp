@@ -55,7 +55,7 @@ public:
 
         d = (d - delta) / select(delta == 0.0f, max(dot(ray.d, -n_detach), 0.01f), 1.0f);
 
-        select(delta == 0.0f, n, n_detach);
+        select(eq(delta, 0.0f), n, n_detach);
 
         si.p[active] = fmadd(si.t + d, ray.d, ray.o);
         si.n[active] = n;
@@ -81,6 +81,11 @@ public:
     //! @}
     // =============================================================
 
+
+    ScalarFloat max_silhouette_delta() const override {
+        return hmax(0.2f * m_distance_field->bbox().extents() / m_distance_field->resolution());
+    }
+
 #if defined(MTS_ENABLE_OPTIX)
 
     virtual void traverse(TraversalCallback *callback) override {
@@ -105,10 +110,6 @@ public:
     }
 
     MTS_DECLARE_CLASS()
-
-    ScalarFloat max_silhouette_delta() const override {
-        return hmax(0.2f * m_distance_field->bbox().extents() / m_distance_field->resolution());
-    }
 
 private:
     ref<Volume<Float, Spectrum>> m_distance_field;

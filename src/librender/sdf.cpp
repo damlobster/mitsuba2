@@ -26,13 +26,14 @@ SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float delta, Float* cache
 
     ScopedPhase sp(ProfilerPhase::RayIntersectSDF);
 
-    ScalarFloat max_radius = max_silhouette_delta();
+    ScalarFloat sil_delta = max_silhouette_delta();
+    const ScalarFloat epsilon = math::RayEpsilon<Float>;
 
     auto [valid, mint, maxt] = m_bbox.ray_intersect(ray);
 
     Mask originInside = mint < ray.mint;
-    masked(mint, originInside) = ray.mint;
-    mint += max_radius / 10;
+    masked(mint, originInside) = ray.mint + 10 * epsilon;
+    masked(mint, !originInside) = ray.mint + sil_delta / 10;
 
     active &= valid && mint <= ray.maxt && maxt > ray.mint;
 
@@ -40,8 +41,6 @@ SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float delta, Float* cache
         return { active, maxt, math::Infinity<Float>, math::Infinity<Float> };
 
     Interaction3f it(mint, ray.time, ray.wavelengths, ray(mint));
-
-    ScalarFloat epsilon = math::RayEpsilon<Float> / 10;
 
     Float omega = 1;
     Float candidate_error = math::Infinity<Float>;
@@ -54,7 +53,7 @@ SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float delta, Float* cache
         d = detach(d);
 
     const Float functionSign = sign(d);
-    const Mask active_sil = d > max_radius;
+    const Mask active_sil = d > sil_delta;
 
     Float silhouette_dist = math::Infinity<Float>;
     Float silhouette_t = math::Infinity<Float>;
@@ -68,7 +67,7 @@ SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float delta, Float* cache
         Float signedRadius = functionSign * dist;
         Float radius = abs(signedRadius);
 
-        auto silhouette = active && active_sil && radius < max_radius && radius > previousRadius && previousRadius < silhouette_dist;
+        auto silhouette = active && active_sil && radius < sil_delta && radius > previousRadius && previousRadius < silhouette_dist;
         masked(silhouette_dist, silhouette) = previousRadius;
         masked(silhouette_t, silhouette) = it.t;
 
@@ -102,7 +101,7 @@ SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float delta, Float* cache
 
     candidate_t = select(!missed, candidate_t, maxt);
 
-    Mask bad_sil = isinf(silhouette_t) || candidate_t - silhouette_t < max_radius;
+    Mask bad_sil = isinf(silhouette_t) || candidate_t - silhouette_t < sil_delta;
     masked(silhouette_dist, bad_sil) = math::Infinity<Float>;
     masked(silhouette_t, bad_sil) = math::Infinity<Float>;
 
@@ -167,6 +166,25 @@ MTS_VARIANT void SDF<Float, Spectrum>::initialize_mesh_vertices() {
 
     } else {
         m_face_count = 1;
+    }
+}
+
+MTS_VARIANT typename SDF<Float, Spectrum>::ScalarBoundingBox3f
+SDF<Float, Spectrum>::bbox(ScalarIndex index) const {
+    if constexpr( is_cuda_array_v<Float> )
+        return Base::bbox(index);
+    else
+        return bbox();
+}
+
+MTS_VARIANT typename SDF<Float, Spectrum>::ScalarBoundingBox3f
+SDF<Float, Spectrum>::bbox(ScalarIndex index, const ScalarBoundingBox3f &clip) const {
+    if constexpr( is_cuda_array_v<Float> ){
+        return Base::bbox(index, clip);
+    } else {
+        ScalarBoundingBox3f result = bbox(index);
+        result.clip(clip);
+        return result;
     }
 }
 

@@ -13,7 +13,7 @@ class MTS_EXPORT_RENDER SDF : public Mesh<Float, Spectrum> {
 public:
     MTS_IMPORT_BASE(Mesh, m_is_sdf, m_mesh, m_vertices, m_faces, m_normal_offset, m_bbox, m_vertex_size,
                     m_face_size, m_to_world, m_vertex_count, m_face_count, m_vertex_struct,
-                    m_face_struct, bbox)
+                    m_face_struct)
     MTS_IMPORT_TYPES(BSDF)
 
     using typename Base::ScalarSize;
@@ -60,6 +60,29 @@ public:
     _ray_intersect(const Ray3f &ray, Float delta, Float *cache, Mask active) const;
 
     virtual ScalarFloat max_silhouette_delta() const { return 0.0f; };
+
+    ScalarBoundingBox3f bbox() const override {
+        return m_bbox;
+    };
+
+    /**
+     * \brief Return an axis aligned box that bounds a single shape primitive
+     * (including any transformations that may have been applied to it)
+     *
+     * \remark The default implementation simply calls \ref bbox()
+     */
+    ScalarBoundingBox3f bbox(ScalarIndex index) const override;
+
+    /**
+     * \brief Return an axis aligned box that bounds a single shape primitive
+     * after it has been clipped to another bounding box.
+     *
+     * This is extremely important to construct high-quality kd-trees. The
+     * default implementation just takes the bounding box returned by
+     * \ref bbox(ScalarIndex index) and clips it to \a clip.
+     */
+    ScalarBoundingBox3f bbox(ScalarIndex index, const ScalarBoundingBox3f &clip) const override;
+
 
 #if defined(MTS_ENABLE_OPTIX)
     virtual void traverse(TraversalCallback *callback) override;

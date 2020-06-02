@@ -130,8 +130,8 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray_, Mask active) const {
             // in case we missed the SDF surface, we should check if an another
             // mesh surface was inside the SDF domain.
             // Note: could be removed if SDF domain never contains other meshes
-            ray.mint[missed_sdf] = si.t + math::RayEpsilon<Float>;
-            ray.maxt[missed_sdf] = t - math::RayEpsilon<Float>;
+            ray.mint[missed_sdf] = si.t + 10.0f*math::RayEpsilon<Float>;
+            ray.maxt[missed_sdf] = t - 10.0f*math::RayEpsilon<Float>;
             si[missed_sdf] = ray_intersect_gpu(ray, missed_sdf);
             missed_sdf &= !si.is_valid();
 
@@ -152,9 +152,8 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray_, Mask active) const {
             si[hit_sdf] = si_;
 
             // continue the ray after the SDF bounding mesh
-            ray.o[missed_sdf] = ray(t + math::RayEpsilon<Float>);
-            ray.mint[missed_sdf] = 0;
-            ray.maxt[missed_sdf] = math::Infinity<Float>;
+            ray.mint[missed_sdf] = t + 10.0f*math::RayEpsilon<Float>;
+            ray.maxt[missed_sdf] = ray_.maxt;
 
             si[missed_sdf] = ray_intersect_gpu(ray, missed_sdf);
 
@@ -205,12 +204,8 @@ Scene<Float, Spectrum>::ray_test(const Ray3f &ray_, Mask active) const {
             result |= hit_sdf;
 
             auto missed_sdf = is_sdf && !hit_sdf;
-            ray.o[missed_sdf] = ray(t + 10*math::RayEpsilon<Float>);
-            ray.mint[missed_sdf] = 0;
-            ray.maxt[missed_sdf] = math::Infinity<Float>;
-
+            ray.mint[missed_sdf] = t + 10.0f*math::RayEpsilon<Float>;
             result |= ray_test_gpu(ray, missed_sdf);
-
         }
         return result;
 
