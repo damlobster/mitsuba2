@@ -32,7 +32,7 @@ SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float delta, Float* cache
     auto [valid, mint, maxt] = m_bbox.ray_intersect(ray);
 
     Mask originInside = mint < ray.mint;
-    masked(mint, originInside) = ray.mint + 10 * epsilon;
+    masked(mint, originInside) = ray.mint + epsilon * 10;
     masked(mint, !originInside) = ray.mint + sil_delta / 10;
 
     active &= valid && mint <= ray.maxt && maxt > ray.mint;
@@ -42,48 +42,39 @@ SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float delta, Float* cache
 
     Interaction3f it(mint, ray.time, ray.wavelengths, ray(mint));
 
-    Float omega = 1;
-    Float candidate_error = math::Infinity<Float>;
     Float candidate_t = mint;
-    Float previousRadius = 0;
-    Float stepLength = 0;
 
-    Float d = distance(it, active);
+    Float dist = distance(it, active);
     if constexpr(is_diff_array_v<Float>)
-        d = detach(d);
+        dist = detach(dist);
 
-    const Float functionSign = sign(d);
-    const Mask active_sil = d > sil_delta;
+    Float previousDist = abs(dist);
 
-    Float silhouette_dist = math::Infinity<Float>;
-    Float silhouette_t = math::Infinity<Float>;
+    const Float originSign = sign(dist);
+    Mask hit = false;
+
+    Float silhouette_dist = previousDist,
+          silhouette_t = math::Infinity<Float>;
 
     for (int i = 0; i < m_sphere_tracing_steps; ++i) {
-
-        Float dist = distance(it, active) - delta;
+        dist = distance(it, active) - delta;
         if constexpr(is_diff_array_v<Float>)
             dist = detach(dist);
 
-        Float signedRadius = functionSign * dist;
-        Float radius = abs(signedRadius);
+        Float signedDist = originSign * dist;
+        Float absDist = abs(signedDist);
 
-        auto silhouette = active && active_sil && radius < sil_delta && radius > previousRadius && previousRadius < silhouette_dist;
-        masked(silhouette_dist, silhouette) = previousRadius;
-        masked(silhouette_t, silhouette) = it.t;
+        auto pd = previousDist + epsilon;
+        auto valid_sil = active && pd < sil_delta && pd < absDist && pd < silhouette_dist;
+        masked(silhouette_dist, valid_sil) = previousDist;
+        masked(silhouette_t, valid_sil) = it.t;
 
-        Mask sorFail = omega > 1 && (radius + previousRadius) < stepLength;
 
-        masked(stepLength, active) = select(sorFail, stepLength - omega * stepLength, signedRadius * omega);
-        masked(omega, active && sorFail) = 1;
-
-        previousRadius = radius;
-        Float error = radius / it.t;
-
-        Mask updatable = active && !sorFail && error < candidate_error;
+        Mask updatable = active && !hit && signedDist < epsilon;
         masked(candidate_t, updatable) = it.t;
-        masked(candidate_error, updatable) = error;
+        hit |= updatable;
 
-        active &= sorFail || (error >= epsilon && it.t <= maxt);
+        active &= !hit && it.t <= maxt;
 
         if constexpr (is_cuda_array_v<Float>){
             if (i%5==4 && none(active))
@@ -93,19 +84,18 @@ SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float delta, Float* cache
                 break;
         }
 
-        masked(it.t, active) += stepLength;
+        previousDist = absDist;
+        masked(it.t, active) += absDist;
         masked(it.p, active) = ray(it.t);
     }
 
-    Mask missed = (candidate_t > ray.maxt || candidate_error > epsilon);
-
-    candidate_t = select(!missed, candidate_t, maxt);
+    candidate_t = select(hit, candidate_t, maxt);
 
     Mask bad_sil = isinf(silhouette_t) || candidate_t - silhouette_t < sil_delta;
     masked(silhouette_dist, bad_sil) = math::Infinity<Float>;
     masked(silhouette_t, bad_sil) = math::Infinity<Float>;
 
-    return { !missed, candidate_t, silhouette_t, silhouette_dist };
+    return { hit, candidate_t, silhouette_t, silhouette_dist };
 }
 
 MTS_VARIANT void SDF<Float, Spectrum>::initialize_mesh_vertices() {

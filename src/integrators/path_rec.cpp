@@ -263,9 +263,9 @@ public:
         SDFPtr sdf = (SDFPtr) si.sdf;
         auto active_sil = active && neq(sdf, nullptr);
 
-        Float delta = select(active_sil, sdf->max_silhouette_delta() + math::RayEpsilon<Float>, 0.0f);
-
-        active_sil &= si.sdf_d <= delta - math::RayEpsilon<Float>;
+        Float delta = select(active_sil, sdf->max_silhouette_delta(), 0.0f);
+        active_sil &= si.sdf_d <= delta;
+        delta = si.sdf_d + 10.0f * math::RayEpsilon<ScalarFloat>;
 
         auto [hit, t, u1, u2] = sdf->_ray_intersect(ray, delta, nullptr, active_sil);
         masked(si.t, hit) = t;
