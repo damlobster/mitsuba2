@@ -110,7 +110,7 @@ public:
         SurfaceInteraction3f si = scene->ray_intersect(ray_, active);
         Mask valid_ray = si.is_valid();
 
-        auto [result, result_sil] = sample_rec<is_diff_array_v<Float>>(1, scene, sampler, ray_, si, 1.0f, 1.0f, valid_ray);
+        auto result = sample_rec<is_diff_array_v<Float>>(1, scene, sampler, ray_, si, 1.0f, 1.0f, valid_ray);
 
         EmitterPtr emitter = si.emitter(scene);
         if (any_or<true>(neq(emitter, nullptr)))
@@ -118,16 +118,14 @@ public:
 
         if constexpr(is_diff_array_v<Float>){
             auto [silhouette_result, sdf_d, silhouette_hit] = sample_silhouette(1, scene, sampler, ray_, si, 1.0f, 1.0f, active);
-            result_sil[silhouette_hit] += (silhouette_result - detach(result)) * grad_weight(sdf_d);
+            result[silhouette_hit] += (silhouette_result - detach(result)) * grad_weight(sdf_d);
         }
 
-        return { result + result_sil, valid_ray };
-        // return { result, valid_ray };
-        // return { result_sil, valid_ray };
+        return { result, valid_ray };
     }
 
     template<bool silhouette_enabled>
-    std::pair<Spectrum, Spectrum> sample_rec(const int depth,
+    Spectrum sample_rec(const int depth,
                         const Scene *scene,
                         Sampler *sampler,
                         const Ray3f &ray_,
@@ -141,7 +139,7 @@ public:
 
         Ray3f ray = ray_;
         SurfaceInteraction3f si = si_;
-        Spectrum result(0.f), result_sil(0.0f);
+        Spectrum result(0.f);
 
         active &= si.is_valid();
 
@@ -162,7 +160,7 @@ public:
         if ((uint32_t) depth >= (uint32_t) m_max_depth ||
             ((!is_cuda_array_v<Float> || m_max_depth < 0) && none(active))){
 
-            return { 0.0f, 0.0f };
+            return 0.0f;
         }
 
         // --------------------- Emitter sampling ---------------------
@@ -194,8 +192,9 @@ public:
             result[active_e] += mis * bsdf_val * emitter_val;
 
             if constexpr(sil_enabled){
-                auto [silhouette_result, sdf_d, silhouette_hit] = sample_silhouette(depth, scene, sampler, ray_e, si_e, throughput, eta, active_e && neq(si_e.sdf, nullptr));
-                result_sil[silhouette_hit] += mis * bsdf_val * (silhouette_result - detach(emitter_val)) * grad_weight(sdf_d);
+                const auto [sdf_d, silhouette_hit] = intersect_silhouette(ray_e, si_e, active_e);
+                const Spectrum emitter_val_detach = detach(emitter_val);
+                result[silhouette_hit] += mis * bsdf_val * (/* 0.0f */ - emitter_val_detach) * grad_weight(sdf_d);
             }
         }
 
@@ -209,7 +208,7 @@ public:
         throughput = throughput * bsdf_val;
         active &= any(neq(depolarize(throughput), 0.f));
         if (none_or<false>(active))
-            return { result, result_sil };
+            return result;
 
         eta *= bs.eta;
 
@@ -234,17 +233,41 @@ public:
             masked(res_bsdf, active) += emission_weight * emitter->eval(si_bsdf, active);
         }
 
-        auto [res, res_sil] = sample_rec<sil_enabled>(depth+1, scene, sampler, ray, si_bsdf, throughput, eta, active);
-        masked(res_bsdf, active) += res;
+        masked(res_bsdf, active) += sample_rec<sil_enabled>(depth+1, scene, sampler, ray, si_bsdf, throughput, eta, active);
 
         if constexpr(sil_enabled){
             auto [silhouette_result, sdf_d, silhouette_hit] = sample_silhouette(depth, scene, sampler, ray, si, throughput, eta, active);
-            res_sil[silhouette_hit] += (silhouette_result - detach(res_bsdf)) * grad_weight(sdf_d);
+            const Spectrum res_bsdf_detach = detach(res_bsdf);
+            res_bsdf[silhouette_hit] += (res_bsdf_detach - silhouette_result) * grad_weight(sdf_d);
         }
 
         result += bsdf_val * res_bsdf;
-        result_sil += bsdf_val * res_sil;
-        return std::pair(result, result_sil);
+        return result;
+    }
+
+    std::pair<Float, Mask> intersect_silhouette(const Ray3f &ray,
+                                             SurfaceInteraction3f &si,
+                                             Mask active) const {
+        if constexpr(!is_diff_array_v<Float>)
+            Throw("Not implemented");
+
+        SDFPtr sdf = (SDFPtr) si.sdf;
+        auto active_sil = active && neq(sdf, nullptr);
+
+        // filter invalid silhouette (too far from ray)
+        const ScalarFloat tan_angle = tan(2.f * math::Pi<ScalarFloat> / 180);
+        Float delta = select(active_sil, tan_angle * si.sdf_t, 0.0f);
+        delta = min(delta, sdf->max_silhouette_delta());
+        active_sil &= si.sdf_d <= delta;
+
+        // Float delta = select(active_sil, sdf->max_silhouette_delta(), 0.0f);
+        // active_sil &= si.sdf_d <= delta;
+        // delta = si.sdf_d; // + 10.0f * math::RayEpsilon<ScalarFloat>;
+
+        auto [hit, t, u1, u2] = sdf->_ray_intersect(ray, delta, nullptr, active_sil);
+        masked(si.t, hit) = t;
+        si[hit] = sdf->_fill_surface_interaction(ray, delta, nullptr, si, hit);
+        return {sdf->distance(si, hit), hit};
     }
 
     std::tuple<Spectrum, Float, Mask> sample_silhouette(const int depth,
@@ -260,19 +283,9 @@ public:
 
         SurfaceInteraction3f si = si_;
 
-        SDFPtr sdf = (SDFPtr) si.sdf;
-        auto active_sil = active && neq(sdf, nullptr);
+        auto [dist, hit] = intersect_silhouette(ray, si, active);
 
-        Float delta = select(active_sil, sdf->max_silhouette_delta(), 0.0f);
-        active_sil &= si.sdf_d <= delta;
-        delta = si.sdf_d + 10.0f * math::RayEpsilon<ScalarFloat>;
-
-        auto [hit, t, u1, u2] = sdf->_ray_intersect(ray, delta, nullptr, active_sil);
-        masked(si.t, hit) = t;
-        si = sdf->_fill_surface_interaction(ray, delta, nullptr, si, hit);
-
-        auto [result, unused] = sample_rec<false>(depth, scene, sampler, ray, si, throughput, eta, hit);
-        Float dist = sdf->distance(si, hit);
+        auto result = sample_rec<false>(depth, scene, sampler, ray, si, throughput, eta, hit);
         return { detach(result), dist, hit };
     }
 
@@ -298,7 +311,7 @@ protected:
     inline Float grad_weight(Float sdf_d) const{
         if constexpr(is_diff_array_v<Float>){
             Float d_detach = detach(sdf_d);
-            return -sdf_d / d_detach;
+            return -(sdf_d - d_detach) / max(d_detach, 0.001f);
             // return d_detach / sdf_d;
         } else {
             return 0.0f;
@@ -314,4 +327,5 @@ NAMESPACE_END(mitsuba)
 ENOKI_CALL_SUPPORT_TEMPLATE_BEGIN(mitsuba::SDFPathIntegrator)
     ENOKI_CALL_SUPPORT_METHOD(sample_rec)
     ENOKI_CALL_SUPPORT_METHOD(sample_silhouette)
+    ENOKI_CALL_SUPPORT_METHOD(intersect_silhouette)
 ENOKI_CALL_SUPPORT_TEMPLATE_END(mitsuba::SDFPathIntegrator)
