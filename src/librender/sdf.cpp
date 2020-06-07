@@ -53,7 +53,7 @@ SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float delta, Float* cache
     const Float originSign = sign(dist);
     Mask hit = false;
 
-    Float silhouette_dist = previousDist,
+    Float silhouette_dist = math::Infinity<Float>,
           silhouette_t = math::Infinity<Float>;
 
     for (int i = 0; i < m_sphere_tracing_steps; ++i) {
@@ -64,8 +64,9 @@ SDF<Float, Spectrum>::_ray_intersect(const Ray3f &ray, Float delta, Float* cache
         Float signedDist = originSign * dist;
         Float absDist = abs(signedDist);
 
-        auto pd = previousDist + epsilon;
-        auto valid_sil = active && pd < sil_delta && pd < absDist && pd < silhouette_dist;
+        auto pd = previousDist;
+        originInside &= pd <= absDist;
+        auto valid_sil = active && !originInside && pd < sil_delta && pd < absDist && pd < silhouette_dist;
         masked(silhouette_dist, valid_sil) = previousDist;
         masked(silhouette_t, valid_sil) = it.t;
 
