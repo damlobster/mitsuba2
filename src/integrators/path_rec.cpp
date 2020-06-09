@@ -140,7 +140,8 @@ public:
         Ray3f ray = ray_;
         SurfaceInteraction3f si = si_;
         Spectrum result(0.f);
-
+        Spectrum throughput_prev = throughput;
+        Float eta_prev = eta;
         active &= si.is_valid();
 
         /* Russian roulette: try to keep path weights equal to one,
@@ -236,9 +237,8 @@ public:
         masked(res_bsdf, active) += sample_rec<sil_enabled>(depth+1, scene, sampler, ray, si_bsdf, throughput, eta, active);
 
         if constexpr(sil_enabled){
-            auto [silhouette_result, sdf_d, silhouette_hit] = sample_silhouette(depth, scene, sampler, ray, si, throughput, eta, active);
-            const Spectrum res_bsdf_detach = detach(res_bsdf);
-            res_bsdf[silhouette_hit] += (res_bsdf_detach - silhouette_result) * grad_weight(sdf_d);
+            auto [silhouette_result, sdf_d, silhouette_hit] = sample_silhouette(depth, scene, sampler, ray, si_bsdf, throughput_prev, eta_prev, active);
+            res_bsdf[silhouette_hit] += (silhouette_result - detach(res_bsdf)) * grad_weight(sdf_d);
         }
 
         result += bsdf_val * res_bsdf;
