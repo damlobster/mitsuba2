@@ -142,6 +142,20 @@ template <typename Value_, size_t Size_> struct Array {
         return v[i];
     }
 
+    DEVICE Value max() const {
+        Value m = v[0];
+        for (size_t i = 1; i < Size; ++i)
+            m = max(m, v[i]);
+        return m;
+    }
+
+    DEVICE Value min() const {
+        Value m = v[0];
+        for (size_t i = 1; i < Size; ++i)
+            m = min(m, v[i]);
+        return m;
+    }
+
     template <size_t S = Size, std::enable_if_t<(S >= 1), int> = 0>
     DEVICE const Value &x() const { return v[0]; }
     template <size_t S = Size, std::enable_if_t<(S >= 1), int> = 0>
@@ -212,7 +226,7 @@ template <typename Value, size_t Size>
 DEVICE Array<Value, Size> max(const Array<Value, Size> &a1, const Array<Value, Size> &a2) {
     Array<Value, Size> result;
     for (size_t i = 0; i < Size; ++i)
-        result.v[i] = std::max(a1.v[i], a2.v[i]);
+        result.v[i] = max(a1.v[i], a2.v[i]);
     return result;
 }
 
@@ -220,7 +234,7 @@ template <typename Value, size_t Size>
 DEVICE Array<Value, Size> min(const Array<Value, Size> &a1, const Array<Value, Size> &a2) {
     Array<Value, Size> result;
     for (size_t i = 0; i < Size; ++i)
-        result.v[i] = std::min(a1.v[i], a2.v[i]);
+        result.v[i] = min(a1.v[i], a2.v[i]);
     return result;
 }
 

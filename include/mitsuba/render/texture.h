@@ -245,6 +245,10 @@ public:
      */
     virtual ScalarVector3i resolution() const;
 
+    virtual DynamicBuffer<Float> &data() const;
+
+    ScalarTransform4f world_to_local() const { return m_world_to_local; }
+
     //! @}
     // ======================================================================
 
