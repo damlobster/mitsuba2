@@ -119,7 +119,7 @@ Volume<Float, Spectrum>::resolution() const {
     return ScalarVector3i(1, 1, 1);
 }
 
-MTS_VARIANT DynamicBuffer<Float> &
+MTS_VARIANT const DynamicBuffer<Float> &
 Volume<Float, Spectrum>::data() const { NotImplementedError("data"); }
 
 

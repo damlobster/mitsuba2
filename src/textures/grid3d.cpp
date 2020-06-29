@@ -363,6 +363,11 @@ public:
     ScalarVector3i resolution() const override { return m_metadata.shape; };
     auto data_size() const { return m_data.size(); }
 
+    virtual const DynamicBuffer<Float> &data() const override {
+        return m_data;
+    }
+
+
     void traverse(TraversalCallback *callback) override {
         callback->put_parameter("data", m_data);
         callback->put_parameter("size", m_size);

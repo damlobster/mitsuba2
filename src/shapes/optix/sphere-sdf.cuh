@@ -16,7 +16,7 @@ struct OptixSphereSdfData {
 #ifdef __CUDACC__
 extern "C" __global__ void __intersection__spheresdf() {
     const OptixHitGroupData *sbt_data = (OptixHitGroupData*) optixGetSbtDataPointer();
-    OptixSdfData *sphere = (OptixSdfData *)sbt_data->data;
+    OptixSphereSdfData *sphere = (OptixSphereSdfData *)sbt_data->data;
 
     float mint = optixGetRayTmin();
     float maxt = min(optixGetRayTmax(), 10.0f); // TODO: Get intersection with the sphere's AABB
@@ -46,7 +46,7 @@ extern "C" __global__ void __closesthit__spheresdf() {
         params.out_hit[launch_index] = true;
     } else {
         const OptixHitGroupData *sbt_data = (OptixHitGroupData *) optixGetSbtDataPointer();
-        OptixSdfData *sphere = (OptixSdfData *)sbt_data->data;
+        OptixSphereSdfData *sphere = (OptixSphereSdfData *)sbt_data->data;
 
         /* Compute and store information describing the intersection. This is
            very similar to Sphere::fill_surface_interaction() */

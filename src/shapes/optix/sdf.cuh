@@ -8,11 +8,11 @@ struct OptixSdfData {
     optix::BoundingBox3f bbox;
     optix::Transform4f to_world;
     optix::Transform4f to_object;
-    float *sdf_data;
+    const float *sdf_data;
     optix::Vector3i resolution;
-    optix::Vector3f center;
-    float radius;
 };
+
+#ifdef __CUDACC__
 
 __device__ bool
 intersect_aabb(const Vector3f &ray_o, const Vector3f &ray_d, float &mint, float &maxt) {
@@ -29,17 +29,27 @@ intersect_aabb(const Vector3f &ray_o, const Vector3f &ray_d, float &mint, float 
     Vector3f t1 = (Vector3f(0.f) - ray_o) * d_rcp,
              t2 = (Vector3f(1.f) - ray_o) * d_rcp;
 
-    // // Ensure proper ordering
+    // Ensure proper ordering
     Vector3f t1p = min(t1, t2),
              t2p = max(t1, t2);
     mint = t1p.max();
     maxt = t2p.max();
 
-    // active = active && (maxt >= mint);
+    active = active && (maxt >= mint);
     return active;
 }
 
-#ifdef __CUDACC__
+__device__ float eval_sdf(const Vector3f &p, const float *sdf, const Vector3i &res) {
+
+    // compute index into the sdf 
+    Vector3i pi(p.x() * res.x(), p.y() * res.y(), p.z() * res.z());
+    pi = max(Vector3i(0,0,0), min(pi, res - 1));
+    unsigned int index = fmaf(fmaf(pi.z(), res.y(), pi.y()), res.x(), pi.x());
+    return sdf[0];
+    // return sdf[index];.
+}
+
+
 extern "C" __global__ void __intersection__sdf() {
     const OptixHitGroupData *sbt_data = (OptixHitGroupData*) optixGetSbtDataPointer();
     OptixSdfData *sdf = (OptixSdfData *)sbt_data->data;
@@ -58,14 +68,20 @@ extern "C" __global__ void __intersection__sdf() {
     //     ray_o.z < 0 || ray_o.z > 1)
     //     return;
 
-    // Intersect the transformed ray with [0,1]
+    // Intersect the transformed ray with the SDFs bounding box [0,1]
+    float aabb_mint, aabb_maxt;
+    bool intersects = intersect_aabb(ray_o, ray_d, aabb_mint, aabb_maxt);
+    if (!intersects)
+        return; // TODO: This should actually never happen, right? 
 
+    Vector3i res = sdf->resolution;
 
+    float t = aabb_mint > 0 ? aabb_mint : aabb_maxt;
+    t = max(t, mint);
 
-    float t = mint;
     while (true) {
         Vector3f p = fmaf(t, ray_d, ray_o);
-        float min_dist = abs(norm(p - sdf->center) - sdf->radius);
+        float min_dist = eval_sdf(p, sdf->sdf_data, res);
         t += min_dist;
 
         if (t > maxt)
@@ -85,7 +101,7 @@ extern "C" __global__ void __closesthit__sdf() {
         params.out_hit[launch_index] = true;
     } else {
         const OptixHitGroupData *sbt_data = (OptixHitGroupData *) optixGetSbtDataPointer();
-        OptixSdfData *sphere = (OptixSdfData *)sbt_data->data;
+        // OptixSdfData *sphere = (OptixSdfData *)sbt_data->data;
 
         /* Compute and store information describing the intersection. This is
            very similar to Sphere::fill_surface_interaction() */
@@ -95,7 +111,7 @@ extern "C" __global__ void __closesthit__sdf() {
         float t = optixGetRayTmax();
 
         Vector3f p = fmaf(t, ray_d, ray_o);
-        Vector3f ns = normalize(p - sphere->center); // gradient of the sphere SDF
+        Vector3f ns = normalize(p ); // gradient of the sphere SDF
 
         Vector2f uv = Vector2f(0.f, 0.f);
         Vector3f dp_du = Vector3f(0.f, 0.f, 0.f);

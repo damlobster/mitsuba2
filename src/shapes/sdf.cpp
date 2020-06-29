@@ -44,7 +44,13 @@ public:
     }
 
     ScalarBoundingBox3f bbox() const override {
-        return m_sdf->bbox();
+        if (m_sdf) {
+            return m_sdf->bbox();
+        } else {
+            ScalarBoundingBox3f aabb(ScalarVector3f(-1.f, -1.f, -1.f), ScalarVector3f(1.f, 1.f, 1.f));
+            Log(Info, "Using default AABB: %s", aabb);
+            return aabb;
+        }
     }
 
     ScalarFloat surface_area() const override {
@@ -58,19 +64,22 @@ public:
     //! @{ \name Ray tracing routines
     // =============================================================
 
-    std::pair<Mask, Float> ray_intersect(const Ray3f &ray,
-                                         Float * /*cache*/,
-                                         Mask active) const override {
+    PreliminaryIntersection3f ray_intersect_preliminary(const Ray3f &ray,
+                                                        Mask active) const override {
         MTS_MASK_ARGUMENT(active);
-        return { false, math::Infinity<Float> };
+        PreliminaryIntersection3f pi = zero<PreliminaryIntersection3f>();
+        return pi;
     }
 
-    Mask ray_test(const Ray3f &ray, Mask active) const override {
+    Mask ray_test(const Ray3f & /* ray */, Mask active) const override {
+        MTS_MASK_ARGUMENT(active);
         return false;
     }
 
-    void fill_surface_interaction(const Ray3f &ray, const Float * /*cache*/,
-                                  SurfaceInteraction3f &si_out, Mask active) const override {
+    SurfaceInteraction3f compute_surface_interaction(const Ray3f &ray,
+                                                     PreliminaryIntersection3f pi,
+                                                     HitComputeFlags flags,
+                                                     Mask active) const override {
         MTS_MASK_ARGUMENT(active);
     }
 
@@ -91,17 +100,27 @@ public:
 
     void optix_prepare_geometry() override {
         if constexpr (is_cuda_array_v<Float>) {
+            Log(Info, "Requesting optix geometry...");
             if (!m_optix_data_ptr)
                 m_optix_data_ptr = cuda_malloc(sizeof(OptixSdfData));
 
-            ScalarFloat *raw_sdf_data = m_sdf->data().data();
+            if (!m_sdf)
+                Log(Error, "SDF Not initialized");
+
+            const DynamicBuffer<float> &sdf_data = m_sdf->data();
+            const ScalarFloat * const raw_sdf_data = sdf_data.data();
             ScalarVector3i res = m_sdf->resolution();
+
+
+            Log(Info, "Copying data to GPU");
             OptixSdfData data = { bbox(),
                                   m_to_world,
                                   m_to_object,
                                   raw_sdf_data,
                                   res };
             cuda_memcpy_to_device(m_optix_data_ptr, &data, sizeof(OptixSdfData));
+            Log(Info, "Done copy to device");
+
         }
     }
 #endif

@@ -4,6 +4,7 @@
 #include <mitsuba/render/bsdf.h>
 #include <mitsuba/render/sensor.h>
 #include <mitsuba/render/medium.h>
+#include <mitsuba/render/texture.h>
 #include <mitsuba/core/plugin.h>
 
 #if defined(MTS_ENABLE_EMBREE)
@@ -43,6 +44,7 @@ MTS_VARIANT Shape<Float, Spectrum>::Shape(const Properties &props) : m_id(props.
         BSDF *bsdf = dynamic_cast<BSDF *>(obj.get());
         Medium *medium = dynamic_cast<Medium *>(obj.get());
 
+        Volume *volume = dynamic_cast<Volume *>(obj.get());
         if (emitter) {
             if (m_emitter)
                 Throw("Only a single Emitter child object can be specified per shape.");
@@ -66,7 +68,8 @@ MTS_VARIANT Shape<Float, Spectrum>::Shape(const Properties &props) : m_id(props.
                 m_exterior_medium = medium;
             }
         } else {
-            continue;
+	    if (!volume)
+                continue;
         }
 
         props.mark_queried(name);
