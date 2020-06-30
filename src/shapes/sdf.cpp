@@ -10,7 +10,16 @@
 #include <mitsuba/render/texture.h>
 #include <mitsuba/render/volume_texture.h>
 
+
 #if defined(MTS_ENABLE_OPTIX)
+    #include <cuda.h>
+
+    #include <cuda_runtime.h>
+    #include <texture_fetch_functions.h>
+    #include <cuda_texture_types.h>
+    #include <texture_indirect_functions.h>
+    #include "device_launch_parameters.h"
+
     #include <mitsuba/render/optix_api.h>
     #include "optix/sdf.cuh"
 #endif
@@ -100,6 +109,7 @@ public:
 
     void optix_prepare_geometry() override {
         if constexpr (is_cuda_array_v<Float>) {
+            ScalarVector3i res = m_sdf->resolution();
             Log(Info, "Requesting optix geometry...");
             if (!m_optix_data_ptr)
                 m_optix_data_ptr = cuda_malloc(sizeof(OptixSdfData));
@@ -109,18 +119,43 @@ public:
 
             const auto &sdf_data = m_sdf->data();
             const float * raw_sdf_data = sdf_data.data();
-            ScalarVector3i res = m_sdf->resolution();
 
 
-            Log(Info, "Copying data to GPU");
+            cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
+            // Create 3D array and copy data to it:
+            cudaArray *d_cuArr;
+            cudaMalloc3DArray(&d_cuArr, &channelDesc, make_cudaExtent(res.x(), res.y(), res.z()), 0);
+            cudaMemcpy3DParms copyParams = {0};
+            copyParams.srcPtr   = make_cudaPitchedPtr((void*) raw_sdf_data, res.x() * sizeof(float), res.y(), res.z());
+            copyParams.dstArray = d_cuArr;
+            copyParams.extent   = make_cudaExtent(res.x(), res.y(), res.z());
+            copyParams.kind     = cudaMemcpyDeviceToDevice;
+            cudaMemcpy3D(&copyParams);
+
+            // Setup texture sampler object
+            cudaResourceDesc    texRes;
+            memset(&texRes, 0, sizeof(cudaResourceDesc));
+            texRes.resType = cudaResourceTypeArray;
+            texRes.res.array.array  = d_cuArr;
+            cudaTextureDesc     texDescr;
+            memset(&texDescr, 0, sizeof(cudaTextureDesc));
+            texDescr.normalizedCoords = false;
+            texDescr.filterMode = cudaFilterModeLinear;
+            texDescr.addressMode[0] = cudaAddressModeClamp;   // clamp
+            texDescr.addressMode[1] = cudaAddressModeClamp;
+            texDescr.addressMode[2] = cudaAddressModeClamp;
+            texDescr.readMode = cudaReadModeElementType;
+            m_cuda_sdf_tex = 0;
+            cudaCreateTextureObject(&m_cuda_sdf_tex, &texRes, &texDescr, NULL);
+
+
             OptixSdfData data = { bbox(),
                                   m_to_world,
                                   m_to_object,
                                   raw_sdf_data,
-                                  res };
+                                  res,
+                                  m_cuda_sdf_tex};
             cuda_memcpy_to_device(m_optix_data_ptr, &data, sizeof(OptixSdfData));
-            Log(Info, "Done copy to device");
-
         }
     }
 #endif
@@ -136,6 +171,8 @@ public:
     MTS_DECLARE_CLASS()
 private:
     ref<Volume> m_sdf;
+    cudaTextureObject_t m_cuda_sdf_tex;
+
 };
 
 MTS_IMPLEMENT_CLASS_VARIANT(Sdf, Shape)

@@ -10,6 +10,7 @@ struct OptixSdfData {
     optix::Transform4f to_object;
     const float *sdf_data = nullptr;
     optix::Vector3i resolution;
+    cudaTextureObject_t sdf_texture;
 };
 
 #ifdef __CUDACC__
@@ -77,6 +78,10 @@ __device__ float eval_sdf(const Vector3f &p, const float *sdf, const Vector3i &r
     return result;
 }
 
+// __device__ bspline_lookup(const Vector3f &p, const cudaTextureObject_t &texture) {
+
+// }
+
 
 extern "C" __global__ void __intersection__sdf() {
     const OptixHitGroupData *sbt_data = (OptixHitGroupData*) optixGetSbtDataPointer();
@@ -104,7 +109,8 @@ extern "C" __global__ void __intersection__sdf() {
 
     while (true) {
         Vector3f p = fmaf(t, ray_d, ray_o);
-        float min_dist = eval_sdf(p, sdf->sdf_data, res);
+        // float min_dist1 = eval_sdf(p, sdf->sdf_data, res);
+        float min_dist = tex3D<float>(sdf->sdf_texture, p.x() * res.x(), p.y() * res.y(), p.z() * res.z());
         t += min_dist;
 
         if (t > maxt)
@@ -142,6 +148,7 @@ extern "C" __global__ void __closesthit__sdf() {
         float v0x = eval_sdf(local_p + Vector3f(eps, 0, 0), sdf->sdf_data, res);
         float v0y = eval_sdf(local_p + Vector3f(0, eps, 0), sdf->sdf_data, res);
         float v0z = eval_sdf(local_p + Vector3f(0, 0, eps), sdf->sdf_data, res);  
+        
         Vector3f grad(v0x - v0, v0y - v0, v0z - v0);
         Vector3f ns = normalize(grad);
 
