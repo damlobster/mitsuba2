@@ -121,6 +121,7 @@ __forceinline__ __device__ Vector3f offsets_deriv(float coord, unsigned int res)
     float a2 = a * a;
     float norm_fac = 1.0f / 6.0f;
     
+    // This is the gradient of the bspline kernel
     float w0 = norm_fac * (-3 * a2 +  6 * a - 3);
     float w1 = norm_fac * ( 9 * a2 - 12 * a    );
     float w2 = norm_fac * (-9 * a2 +  6 * a + 3);
@@ -195,21 +196,17 @@ __device__ Vector3f bspline_lookup_gradient(const Vector3f &p, const cudaTexture
     float tex1  = lerp(tex11, tex10, hg_y.z());
     grad.x() = (tex1 - tex0) * hg_x.z();
 
-    tex00 = lerp(tex001, tex000, hg_z.z());
-    tex01 = lerp(tex011, tex010, hg_z.z());
-    tex10 = lerp(tex101, tex100, hg_z.z());
-    tex11 = lerp(tex111, tex110, hg_z.z());
-    tex0  = (tex01 - tex00) * hg_y.z();
-    tex1  = (tex11 - tex10) * hg_y.z();
-    grad.y() = lerp(tex1, tex0, hg_x.z());
+    float g_tex0 = (tex01 - tex00) * hg_y.z();
+    float g_tex1 = (tex11 - tex10) * hg_y.z();
+    grad.y() = lerp(g_tex1, g_tex0, hg_x.z());
 
-    tex00 = (tex001 - tex000) * hg_z.z();
-    tex01 = (tex011 - tex010) * hg_z.z();
-    tex10 = (tex101 - tex100) * hg_z.z();
-    tex11 = (tex111 - tex110) * hg_z.z();
-    tex0  = lerp(tex01, tex00, hg_y.z());
-    tex1  = lerp(tex11, tex10, hg_y.z());
-    grad.z() = lerp(tex1, tex0, hg_x.z());
+    float g_tex00 = (tex001 - tex000) * hg_z.z();
+    float g_tex01 = (tex011 - tex010) * hg_z.z();
+    float g_tex10 = (tex101 - tex100) * hg_z.z();
+    float g_tex11 = (tex111 - tex110) * hg_z.z();
+    g_tex0 = lerp(g_tex01, g_tex00, hg_y.z());
+    g_tex1 = lerp(g_tex11, g_tex10, hg_y.z());
+    grad.z() = lerp(g_tex1, g_tex0, hg_x.z());
     return grad;
 }
 
