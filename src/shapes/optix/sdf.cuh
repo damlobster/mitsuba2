@@ -8,14 +8,17 @@ struct OptixSdfData {
     optix::BoundingBox3f bbox;
     optix::Transform4f to_world;
     optix::Transform4f to_object;
-    const float *sdf_data;
+    const float *sdf_data = nullptr;
     optix::Vector3i resolution;
 };
 
 #ifdef __CUDACC__
 
 __device__ bool
-intersect_aabb(const Vector3f &ray_o, const Vector3f &ray_d, float &mint, float &maxt) {
+intersect_aabb(const Vector3f &ray_o, 
+               const Vector3f &ray_d, 
+               float &mint, 
+               float &maxt) {
 
     /* First, ensure that the ray either has a nonzero slope on each axis,
         or that its origin on a zero-valued axis is within the box bounds */
@@ -40,13 +43,38 @@ intersect_aabb(const Vector3f &ray_o, const Vector3f &ray_d, float &mint, float 
 }
 
 __device__ float eval_sdf(const Vector3f &p, const float *sdf, const Vector3i &res) {
-
-    // compute index into the sdf 
-    Vector3i pi(p.x() * res.x(), p.y() * res.y(), p.z() * res.z());
+    Vector3f p_scaled((res.x() - 1) * p.x(), (res.y() - 1) * p.y(), (res.z() - 1) * p.z());
+    Vector3i pi(p_scaled.x(), p_scaled.y(), p_scaled.z());
     pi = max(Vector3i(0,0,0), min(pi, res - 1));
+
+    // If we are trying to evaluate a point outside the SDF: just assume we completely missed the shape for now
+    if ((pi.x() < 0) || (pi.y() < 0) || (pi.z() < 0) || 
+        (pi.x() + 1 >= res.x()) || (pi.y() + 1 >= res.y()) || (pi.z() + 1 >= res.z())) {
+            return 1000.f;
+    }
+
+    Vector3f f = p_scaled - Vector3f(pi.x(), pi.y(), pi.z());
+    Vector3f rf = Vector3f(1.f, 1.f, 1.f) - f;
+
     unsigned int index = fmaf(fmaf(pi.z(), res.y(), pi.y()), res.x(), pi.x());
-    return sdf[0];
-    // return sdf[index];.
+    unsigned int z_offset = res.x() * res.y();
+    float v000 = sdf[index],
+          v001 = sdf[index + 1],
+          v010 = sdf[index + res.x()],
+          v011 = sdf[index + res.x() + 1],
+          v100 = sdf[index + z_offset],
+          v101 = sdf[index + z_offset + 1],
+          v110 = sdf[index + z_offset + res.x()],
+          v111 = sdf[index + z_offset + res.x() + 1];
+
+    float v00 = fmaf(v000, rf.x(), v001 * f.x()),
+          v01 = fmaf(v010, rf.x(), v011 * f.x()),
+          v10 = fmaf(v100, rf.x(), v101 * f.x()),
+          v11 = fmaf(v110, rf.x(), v111 * f.x());
+    float v0  = fmaf(v00, rf.y(), v01 * f.y()),
+          v1  = fmaf(v10, rf.y(), v11 * f.y());
+    float result = fmaf(v0, rf.z(), v1 * f.z());
+    return result;
 }
 
 
@@ -62,12 +90,6 @@ extern "C" __global__ void __intersection__sdf() {
     // Transform the ray to the SDFs coordinate system
     ray_o = sdf->to_object.transform_point(ray_o);
 
-    // If the original point is outside the SDF, just terminate
-    // if (ray_o.x < 0 || ray_o.x > 1 ||
-    //     ray_o.y < 0 || ray_o.y > 1 ||
-    //     ray_o.z < 0 || ray_o.z > 1)
-    //     return;
-
     // Intersect the transformed ray with the SDFs bounding box [0,1]
     float aabb_mint, aabb_maxt;
     bool intersects = intersect_aabb(ray_o, ray_d, aabb_mint, aabb_maxt);
@@ -78,6 +100,7 @@ extern "C" __global__ void __intersection__sdf() {
 
     float t = aabb_mint > 0 ? aabb_mint : aabb_maxt;
     t = max(t, mint);
+    t += 1e-5; // Small ray epsilon to always query position inside the grid
 
     while (true) {
         Vector3f p = fmaf(t, ray_d, ray_o);
@@ -101,7 +124,7 @@ extern "C" __global__ void __closesthit__sdf() {
         params.out_hit[launch_index] = true;
     } else {
         const OptixHitGroupData *sbt_data = (OptixHitGroupData *) optixGetSbtDataPointer();
-        // OptixSdfData *sphere = (OptixSdfData *)sbt_data->data;
+        OptixSdfData *sdf = (OptixSdfData *)sbt_data->data;
 
         /* Compute and store information describing the intersection. This is
            very similar to Sphere::fill_surface_interaction() */
@@ -109,9 +132,18 @@ extern "C" __global__ void __closesthit__sdf() {
         Vector3f ray_o = make_vector3f(optixGetWorldRayOrigin());
         Vector3f ray_d = make_vector3f(optixGetWorldRayDirection());
         float t = optixGetRayTmax();
+        Vector3i res = sdf->resolution;
 
         Vector3f p = fmaf(t, ray_d, ray_o);
-        Vector3f ns = normalize(p ); // gradient of the sphere SDF
+        Vector3f local_p = sdf->to_object.transform_point(p);
+
+        float eps = 0.001f;
+        float v0 = eval_sdf(local_p, sdf->sdf_data, res);
+        float v0x = eval_sdf(local_p + Vector3f(eps, 0, 0), sdf->sdf_data, res);
+        float v0y = eval_sdf(local_p + Vector3f(0, eps, 0), sdf->sdf_data, res);
+        float v0z = eval_sdf(local_p + Vector3f(0, 0, eps), sdf->sdf_data, res);  
+        Vector3f grad(v0x - v0, v0y - v0, v0z - v0);
+        Vector3f ns = normalize(grad);
 
         Vector2f uv = Vector2f(0.f, 0.f);
         Vector3f dp_du = Vector3f(0.f, 0.f, 0.f);

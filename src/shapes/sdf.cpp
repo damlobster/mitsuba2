@@ -47,7 +47,7 @@ public:
         if (m_sdf) {
             return m_sdf->bbox();
         } else {
-            ScalarBoundingBox3f aabb(ScalarVector3f(-1.f, -1.f, -1.f), ScalarVector3f(1.f, 1.f, 1.f));
+            ScalarBoundingBox3f aabb(ScalarVector3f(0.f, 0.f, 0.f), ScalarVector3f(1.f, 1.f, 1.f));
             Log(Info, "Using default AABB: %s", aabb);
             return aabb;
         }
@@ -107,8 +107,8 @@ public:
             if (!m_sdf)
                 Log(Error, "SDF Not initialized");
 
-            const DynamicBuffer<float> &sdf_data = m_sdf->data();
-            const ScalarFloat * const raw_sdf_data = sdf_data.data();
+            const auto &sdf_data = m_sdf->data();
+            const float * raw_sdf_data = sdf_data.data();
             ScalarVector3i res = m_sdf->resolution();
 
 
