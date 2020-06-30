@@ -112,6 +112,29 @@ __forceinline__ __device__ Vector3f offsets(float coord, unsigned int res) {
     return Vector3f(h0, h1, g0);
 }
 
+__forceinline__ __device__ Vector3f offsets_deriv(float coord, unsigned int res) {
+    float coord_hg = coord * res - 0.5f;
+    float int_part = floorf(coord_hg);
+    float tc = int_part + 0.5f;
+    float a = coord_hg - int_part;
+
+    float a2 = a * a;
+    float norm_fac = 1.0f / 6.0f;
+    
+    float w0 = norm_fac * (-3 * a2 +  6 * a - 3);
+    float w1 = norm_fac * ( 9 * a2 - 12 * a    );
+    float w2 = norm_fac * (-9 * a2 +  6 * a + 3);
+    float w3 = norm_fac * 3 * a2;
+
+    // As in primal version, use the weight values to determine lookup locations
+    float g0 = w0 + w1;
+    float inv_res = 1.f / res;
+    float h0 = inv_res * (tc - 1 + w1 / (w0 + w1));
+    float h1 = inv_res * (tc + 1 + w3 / (w2 + w3));
+    return Vector3f(h0, h1, g0);
+}
+
+
 
 // Implements a bspline interpolated lookup into a voxel grid
 // The implementation follows https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-20-fast-third-order-texture-filtering
@@ -143,6 +166,53 @@ __device__ float bspline_lookup(const Vector3f &p, const cudaTextureObject_t &te
     float tex1  = lerp(tex11, tex10, hg_y.z());
     return lerp(tex1, tex0, hg_x.z());
 }
+
+__device__ Vector3f bspline_lookup_gradient(const Vector3f &p, const cudaTextureObject_t &texture, const Vector3i &res) {
+
+    // Compute the various lookup parameters
+    // This code could be vectorized across dimensions 
+    Vector3f hg_x = offsets_deriv(p.x(), res.x());
+    Vector3f hg_y = offsets_deriv(p.y(), res.y());
+    Vector3f hg_z = offsets_deriv(p.z(), res.z());
+
+    // fetch eight linearly interpolated inputs at the different locations computed earlier
+    float tex000 = tex3D<float>(texture, hg_x.x(), hg_y.x(), hg_z.x());
+    float tex100 = tex3D<float>(texture, hg_x.y(), hg_y.x(), hg_z.x());
+    float tex010 = tex3D<float>(texture, hg_x.x(), hg_y.y(), hg_z.x());
+    float tex110 = tex3D<float>(texture, hg_x.y(), hg_y.y(), hg_z.x());
+    float tex001 = tex3D<float>(texture, hg_x.x(), hg_y.x(), hg_z.y());
+    float tex101 = tex3D<float>(texture, hg_x.y(), hg_y.x(), hg_z.y());
+    float tex011 = tex3D<float>(texture, hg_x.x(), hg_y.y(), hg_z.y());
+    float tex111 = tex3D<float>(texture, hg_x.y(), hg_y.y(), hg_z.y());
+
+    // Interpolate all these results using the precomputed weights
+    Vector3f grad;
+    float tex00 = lerp(tex001, tex000, hg_z.z());
+    float tex01 = lerp(tex011, tex010, hg_z.z());
+    float tex10 = lerp(tex101, tex100, hg_z.z());
+    float tex11 = lerp(tex111, tex110, hg_z.z());
+    float tex0  = lerp(tex01, tex00, hg_y.z());
+    float tex1  = lerp(tex11, tex10, hg_y.z());
+    grad.x() = (tex1 - tex0) * hg_x.z();
+
+    tex00 = lerp(tex001, tex000, hg_z.z());
+    tex01 = lerp(tex011, tex010, hg_z.z());
+    tex10 = lerp(tex101, tex100, hg_z.z());
+    tex11 = lerp(tex111, tex110, hg_z.z());
+    tex0  = (tex01 - tex00) * hg_y.z();
+    tex1  = (tex11 - tex10) * hg_y.z();
+    grad.y() = lerp(tex1, tex0, hg_x.z());
+
+    tex00 = (tex001 - tex000) * hg_z.z();
+    tex01 = (tex011 - tex010) * hg_z.z();
+    tex10 = (tex101 - tex100) * hg_z.z();
+    tex11 = (tex111 - tex110) * hg_z.z();
+    tex0  = lerp(tex01, tex00, hg_y.z());
+    tex1  = lerp(tex11, tex10, hg_y.z());
+    grad.z() = lerp(tex1, tex0, hg_x.z());
+    return grad;
+}
+
 
 
 extern "C" __global__ void __intersection__sdf() {
@@ -208,25 +278,22 @@ extern "C" __global__ void __closesthit__sdf() {
         Vector3f p = fmaf(t, ray_d, ray_o);
         Vector3f local_p = sdf->to_object.transform_point(p);
 
-        float eps = 0.005f;
-
-        float v0 = bspline_lookup(local_p, sdf->sdf_texture, res);
-        float v0x = bspline_lookup(local_p + Vector3f(eps, 0, 0), sdf->sdf_texture, res);
-        float v0y = bspline_lookup(local_p + Vector3f(0, eps, 0), sdf->sdf_texture, res);
-        float v0z = bspline_lookup(local_p + Vector3f(0, 0, eps), sdf->sdf_texture, res);  
-
-        
+        // float eps = 0.005f; // used for finite difference normal estimation
+        // float v0 = bspline_lookup(local_p, sdf->sdf_texture, res);
+        // float v0x = bspline_lookup(local_p + Vector3f(eps, 0, 0), sdf->sdf_texture, res);
+        // float v0y = bspline_lookup(local_p + Vector3f(0, eps, 0), sdf->sdf_texture, res);
+        // float v0z = bspline_lookup(local_p + Vector3f(0, 0, eps), sdf->sdf_texture, res);  
         // float v0 = tex3D<float>(sdf->sdf_texture, local_p.x(), local_p.y(), local_p.z());
         // float v0x = tex3D<float>(sdf->sdf_texture, local_p.x() + eps, local_p.y(), local_p.z());
         // float v0y = tex3D<float>(sdf->sdf_texture, local_p.x(), local_p.y() + eps, local_p.z());
         // float v0z = tex3D<float>(sdf->sdf_texture, local_p.x(), local_p.y(), local_p.z() + eps);
-
         // float v0 = eval_sdf(local_p, sdf->sdf_data, res);
         // float v0x = eval_sdf(local_p + Vector3f(eps, 0, 0), sdf->sdf_data, res);
         // float v0y = eval_sdf(local_p + Vector3f(0, eps, 0), sdf->sdf_data, res);
         // float v0z = eval_sdf(local_p + Vector3f(0, 0, eps), sdf->sdf_data, res);  
         
-        Vector3f grad(v0x - v0, v0y - v0, v0z - v0);
+        // Vector3f grad(v0x - v0, v0y - v0, v0z - v0);
+        Vector3f grad = bspline_lookup_gradient(local_p, sdf->sdf_texture, res);
         Vector3f ns = normalize(grad);
 
         Vector2f uv = Vector2f(0.f, 0.f);
