@@ -139,7 +139,7 @@ public:
             texRes.res.array.array  = d_cuArr;
             cudaTextureDesc     texDescr;
             memset(&texDescr, 0, sizeof(cudaTextureDesc));
-            texDescr.normalizedCoords = false;
+            texDescr.normalizedCoords = true;
             texDescr.filterMode = cudaFilterModeLinear;
             texDescr.addressMode[0] = cudaAddressModeClamp;   // clamp
             texDescr.addressMode[1] = cudaAddressModeClamp;
