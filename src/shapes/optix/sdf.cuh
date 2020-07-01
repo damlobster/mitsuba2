@@ -144,69 +144,98 @@ __device__ float bspline_lookup(const Vector3f &p, const cudaTextureObject_t &te
 
     // Compute the various lookup parameters
     // This code could be vectorized across dimensions 
-    Vector3f hg_x = offsets(p.x(), res.x());
-    Vector3f hg_y = offsets(p.y(), res.y());
-    Vector3f hg_z = offsets(p.z(), res.z());
+    Vector3f o_x = offsets(p.x(), res.x());
+    Vector3f o_y = offsets(p.y(), res.y());
+    Vector3f o_z = offsets(p.z(), res.z());
 
     // fetch eight linearly interpolated inputs at the different locations computed earlier
-    float tex000 = tex3D<float>(texture, hg_x.x(), hg_y.x(), hg_z.x());
-    float tex100 = tex3D<float>(texture, hg_x.y(), hg_y.x(), hg_z.x());
-    float tex010 = tex3D<float>(texture, hg_x.x(), hg_y.y(), hg_z.x());
-    float tex110 = tex3D<float>(texture, hg_x.y(), hg_y.y(), hg_z.x());
-    float tex001 = tex3D<float>(texture, hg_x.x(), hg_y.x(), hg_z.y());
-    float tex101 = tex3D<float>(texture, hg_x.y(), hg_y.x(), hg_z.y());
-    float tex011 = tex3D<float>(texture, hg_x.x(), hg_y.y(), hg_z.y());
-    float tex111 = tex3D<float>(texture, hg_x.y(), hg_y.y(), hg_z.y());
+    float tex000 = tex3D<float>(texture, o_x.x(), o_y.x(), o_z.x());
+    float tex100 = tex3D<float>(texture, o_x.y(), o_y.x(), o_z.x());
+    float tex010 = tex3D<float>(texture, o_x.x(), o_y.y(), o_z.x());
+    float tex110 = tex3D<float>(texture, o_x.y(), o_y.y(), o_z.x());
+    float tex001 = tex3D<float>(texture, o_x.x(), o_y.x(), o_z.y());
+    float tex101 = tex3D<float>(texture, o_x.y(), o_y.x(), o_z.y());
+    float tex011 = tex3D<float>(texture, o_x.x(), o_y.y(), o_z.y());
+    float tex111 = tex3D<float>(texture, o_x.y(), o_y.y(), o_z.y());
 
     // Interpolate all these results using the precomputed weights
-    float tex00 = lerp(tex001, tex000, hg_z.z());
-    float tex01 = lerp(tex011, tex010, hg_z.z());
-    float tex10 = lerp(tex101, tex100, hg_z.z());
-    float tex11 = lerp(tex111, tex110, hg_z.z());
-    float tex0  = lerp(tex01, tex00, hg_y.z());
-    float tex1  = lerp(tex11, tex10, hg_y.z());
-    return lerp(tex1, tex0, hg_x.z());
+    float tex00 = lerp(tex001, tex000, o_z.z());
+    float tex01 = lerp(tex011, tex010, o_z.z());
+    float tex10 = lerp(tex101, tex100, o_z.z());
+    float tex11 = lerp(tex111, tex110, o_z.z());
+    float tex0  = lerp(tex01, tex00, o_y.z());
+    float tex1  = lerp(tex11, tex10, o_y.z());
+    return lerp(tex1, tex0, o_x.z());
 }
 
 __device__ Vector3f bspline_lookup_gradient(const Vector3f &p, const cudaTextureObject_t &texture, const Vector3i &res) {
 
     // Compute the various lookup parameters
     // This code could be vectorized across dimensions 
-    Vector3f hg_x = offsets_deriv(p.x(), res.x());
-    Vector3f hg_y = offsets_deriv(p.y(), res.y());
-    Vector3f hg_z = offsets_deriv(p.z(), res.z());
+    Vector3f o_x = offsets(p.x(), res.x());
+    Vector3f o_y = offsets(p.y(), res.y());
+    Vector3f o_z = offsets(p.z(), res.z());
+    Vector3f grad_o_x = offsets_deriv(p.x(), res.x());
+    Vector3f grad_o_y = offsets_deriv(p.y(), res.y());
+    Vector3f grad_o_z = offsets_deriv(p.z(), res.z());
 
     // fetch eight linearly interpolated inputs at the different locations computed earlier
-    float tex000 = tex3D<float>(texture, hg_x.x(), hg_y.x(), hg_z.x());
-    float tex100 = tex3D<float>(texture, hg_x.y(), hg_y.x(), hg_z.x());
-    float tex010 = tex3D<float>(texture, hg_x.x(), hg_y.y(), hg_z.x());
-    float tex110 = tex3D<float>(texture, hg_x.y(), hg_y.y(), hg_z.x());
-    float tex001 = tex3D<float>(texture, hg_x.x(), hg_y.x(), hg_z.y());
-    float tex101 = tex3D<float>(texture, hg_x.y(), hg_y.x(), hg_z.y());
-    float tex011 = tex3D<float>(texture, hg_x.x(), hg_y.y(), hg_z.y());
-    float tex111 = tex3D<float>(texture, hg_x.y(), hg_y.y(), hg_z.y());
+    float gx_tex000 = tex3D<float>(texture, grad_o_x.x(), o_y.x(), o_z.x());
+    float gx_tex100 = tex3D<float>(texture, grad_o_x.y(), o_y.x(), o_z.x());
+    float gx_tex010 = tex3D<float>(texture, grad_o_x.x(), o_y.y(), o_z.x());
+    float gx_tex110 = tex3D<float>(texture, grad_o_x.y(), o_y.y(), o_z.x());
+    float gx_tex001 = tex3D<float>(texture, grad_o_x.x(), o_y.x(), o_z.y());
+    float gx_tex101 = tex3D<float>(texture, grad_o_x.y(), o_y.x(), o_z.y());
+    float gx_tex011 = tex3D<float>(texture, grad_o_x.x(), o_y.y(), o_z.y());
+    float gx_tex111 = tex3D<float>(texture, grad_o_x.y(), o_y.y(), o_z.y());
+
+    float gy_tex000 = tex3D<float>(texture, o_x.x(), grad_o_y.x(), o_z.x());
+    float gy_tex100 = tex3D<float>(texture, o_x.y(), grad_o_y.x(), o_z.x());
+    float gy_tex010 = tex3D<float>(texture, o_x.x(), grad_o_y.y(), o_z.x());
+    float gy_tex110 = tex3D<float>(texture, o_x.y(), grad_o_y.y(), o_z.x());
+    float gy_tex001 = tex3D<float>(texture, o_x.x(), grad_o_y.x(), o_z.y());
+    float gy_tex101 = tex3D<float>(texture, o_x.y(), grad_o_y.x(), o_z.y());
+    float gy_tex011 = tex3D<float>(texture, o_x.x(), grad_o_y.y(), o_z.y());
+    float gy_tex111 = tex3D<float>(texture, o_x.y(), grad_o_y.y(), o_z.y());
+
+    float gz_tex000 = tex3D<float>(texture, o_x.x(), o_y.x(), grad_o_z.x());
+    float gz_tex100 = tex3D<float>(texture, o_x.y(), o_y.x(), grad_o_z.x());
+    float gz_tex010 = tex3D<float>(texture, o_x.x(), o_y.y(), grad_o_z.x());
+    float gz_tex110 = tex3D<float>(texture, o_x.y(), o_y.y(), grad_o_z.x());
+    float gz_tex001 = tex3D<float>(texture, o_x.x(), o_y.x(), grad_o_z.y());
+    float gz_tex101 = tex3D<float>(texture, o_x.y(), o_y.x(), grad_o_z.y());
+    float gz_tex011 = tex3D<float>(texture, o_x.x(), o_y.y(), grad_o_z.y());
+    float gz_tex111 = tex3D<float>(texture, o_x.y(), o_y.y(), grad_o_z.y());
 
     // Interpolate all these results using the precomputed weights
-    Vector3f grad;
-    float tex00 = lerp(tex001, tex000, hg_z.z());
-    float tex01 = lerp(tex011, tex010, hg_z.z());
-    float tex10 = lerp(tex101, tex100, hg_z.z());
-    float tex11 = lerp(tex111, tex110, hg_z.z());
-    float tex0  = lerp(tex01, tex00, hg_y.z());
-    float tex1  = lerp(tex11, tex10, hg_y.z());
-    grad.x() = (tex1 - tex0) * hg_x.z();
-
-    float g_tex0 = (tex01 - tex00) * hg_y.z();
-    float g_tex1 = (tex11 - tex10) * hg_y.z();
-    grad.y() = lerp(g_tex1, g_tex0, hg_x.z());
-
-    float g_tex00 = (tex001 - tex000) * hg_z.z();
-    float g_tex01 = (tex011 - tex010) * hg_z.z();
-    float g_tex10 = (tex101 - tex100) * hg_z.z();
-    float g_tex11 = (tex111 - tex110) * hg_z.z();
-    g_tex0 = lerp(g_tex01, g_tex00, hg_y.z());
-    g_tex1 = lerp(g_tex11, g_tex10, hg_y.z());
-    grad.z() = lerp(g_tex1, g_tex0, hg_x.z());
+    Vector3f grad; 
+    {
+        float tex00 = lerp(gx_tex001, gx_tex000, o_z.z());
+        float tex01 = lerp(gx_tex011, gx_tex010, o_z.z());
+        float tex10 = lerp(gx_tex101, gx_tex100, o_z.z());
+        float tex11 = lerp(gx_tex111, gx_tex110, o_z.z());
+        float tex0  = lerp(tex01, tex00, o_y.z());
+        float tex1  = lerp(tex11, tex10, o_y.z());
+        grad.x() = (tex1 - tex0) * grad_o_x.z();
+    }
+    {
+        float tex00 = lerp(gy_tex001, gy_tex000, o_z.z());
+        float tex01 = lerp(gy_tex011, gy_tex010, o_z.z());
+        float tex10 = lerp(gy_tex101, gy_tex100, o_z.z());
+        float tex11 = lerp(gy_tex111, gy_tex110, o_z.z());
+        float tex0  = (tex01 - tex00) * grad_o_y.z();
+        float tex1  = (tex11 - tex10) * grad_o_y.z();
+        grad.y() = lerp(tex1, tex0, o_x.z());
+    }
+    {
+        float tex00 = (gz_tex001 - gz_tex000) * grad_o_z.z();
+        float tex01 = (gz_tex011 - gz_tex010) * grad_o_z.z();
+        float tex10 = (gz_tex101 - gz_tex100) * grad_o_z.z();
+        float tex11 = (gz_tex111 - gz_tex110) * grad_o_z.z();
+        float tex0  = lerp(tex01, tex00, o_y.z());
+        float tex1  = lerp(tex11, tex10, o_y.z());
+        grad.z() = lerp(tex1, tex0, o_x.z());
+    }
     return grad;
 }
 
@@ -238,7 +267,7 @@ extern "C" __global__ void __intersection__sdf() {
     t += 1e-5; // Small ray epsilon to always query position inside the grid
 
     // while (true) {
-    for (int i =0; i < 4096; ++i) {
+    for (int i = 0; i < 4096; ++i) {
         Vector3f p = fmaf(t, ray_d, ray_o);
         // float min_dist1 = eval_sdf(p, sdf->sdf_data, res);
         // float min_dist = tex3D<float>(sdf->sdf_texture, p.x(), p.y(), p.z());
@@ -280,15 +309,16 @@ extern "C" __global__ void __closesthit__sdf() {
         // float v0x = bspline_lookup(local_p + Vector3f(eps, 0, 0), sdf->sdf_texture, res);
         // float v0y = bspline_lookup(local_p + Vector3f(0, eps, 0), sdf->sdf_texture, res);
         // float v0z = bspline_lookup(local_p + Vector3f(0, 0, eps), sdf->sdf_texture, res);  
+
+        // // float v0 = eval_sdf(local_p, sdf->sdf_data, res);
+        // // float v0x = eval_sdf(local_p + Vector3f(eps, 0, 0), sdf->sdf_data, res);
+        // // float v0y = eval_sdf(local_p + Vector3f(0, eps, 0), sdf->sdf_data, res);
+        // // float v0z = eval_sdf(local_p + Vector3f(0, 0, eps), sdf->sdf_data, res);  
+        
         // float v0 = tex3D<float>(sdf->sdf_texture, local_p.x(), local_p.y(), local_p.z());
         // float v0x = tex3D<float>(sdf->sdf_texture, local_p.x() + eps, local_p.y(), local_p.z());
         // float v0y = tex3D<float>(sdf->sdf_texture, local_p.x(), local_p.y() + eps, local_p.z());
         // float v0z = tex3D<float>(sdf->sdf_texture, local_p.x(), local_p.y(), local_p.z() + eps);
-        // float v0 = eval_sdf(local_p, sdf->sdf_data, res);
-        // float v0x = eval_sdf(local_p + Vector3f(eps, 0, 0), sdf->sdf_data, res);
-        // float v0y = eval_sdf(local_p + Vector3f(0, eps, 0), sdf->sdf_data, res);
-        // float v0z = eval_sdf(local_p + Vector3f(0, 0, eps), sdf->sdf_data, res);  
-        
         // Vector3f grad(v0x - v0, v0y - v0, v0z - v0);
         Vector3f grad = bspline_lookup_gradient(local_p, sdf->sdf_texture, res);
         Vector3f ns = normalize(grad);
