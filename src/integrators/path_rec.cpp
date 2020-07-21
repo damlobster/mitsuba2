@@ -12,7 +12,7 @@ NAMESPACE_BEGIN(mitsuba)
 
 /**!
 
-.. _integrator-path:
+.. _integrator-path_rec:
 
 Path tracer (:monosp:`path`)
 -------------------------------------------
@@ -32,61 +32,7 @@ Path tracer (:monosp:`path`)
    - |bool|
    - Hide directly visible emitters. (Default: no, i.e. |false|)
 
-This integrator implements a basic path tracer and is a **good default choice**
-when there is no strong reason to prefer another method.
-
-To use the path tracer appropriately, it is instructive to know roughly how
-it works: its main operation is to trace many light paths using *random walks*
-starting from the sensor. A single random walk is shown below, which entails
-casting a ray associated with a pixel in the output image and searching for
-the first visible intersection. A new direction is then chosen at the intersection,
-and the ray-casting step repeats over and over again (until one of several
-stopping criteria applies).
-
-.. image:: ../images/integrator_path_figure.png
-    :width: 95%
-    :align: center
-
-At every intersection, the path tracer tries to create a connection to
-the light source in an attempt to find a *complete* path along which
-light can flow from the emitter to the sensor. This of course only works
-when there is no occluding object between the intersection and the emitter.
-
-This directly translates into a category of scenes where
-a path tracer can be expected to produce reasonable results: this is the case
-when the emitters are easily "accessible" by the contents of the scene. For instance,
-an interior scene that is lit by an area light will be considerably harder
-to render when this area light is inside a glass enclosure (which
-effectively counts as an occluder).
-
-Like the :ref:`direct <integrator-direct>` plugin, the path tracer internally relies on multiple importance
-sampling to combine BSDF and emitter samples. The main difference in comparison
-to the former plugin is that it considers light paths of arbitrary length to compute
-both direct and indirect illumination.
-
-.. _sec-path-strictnormals:
-
-.. Commented out for now
-.. Strict normals
-   --------------
-
-.. Triangle meshes often rely on interpolated shading normals
-   to suppress the inherently faceted appearance of the underlying geometry. These
-   "fake" normals are not without problems, however. They can lead to paradoxical
-   situations where a light ray impinges on an object from a direction that is
-   classified as "outside" according to the shading normal, and "inside" according
-   to the true geometric normal.
-
-.. The :paramtype:`strict_normals` parameter specifies the intended behavior when such cases arise. The
-   default (|false|, i.e. "carry on") gives precedence to information given by the shading normal and
-   considers such light paths to be valid. This can theoretically cause light "leaks" through
-   boundaries, but it is not much of a problem in practice.
-
-.. When set to |true|, the path tracer detects inconsistencies and ignores these paths. When objects
-   are poorly tesselated, this latter option may cause them to lose a significant amount of the
-   incident radiation (or, in other words, they will look dark).
-
-.. note:: This integrator does not handle participating media
+This integrator implements basic path tracer functionnalities. It is specifically designed to work in conjunction with signed distance function based shapes and provides estimation of gradients at silhouettes edges discontinuities when using it with Enoki's DiffArray.
 
  */
 
@@ -118,7 +64,7 @@ public:
 
         if constexpr(is_diff_array_v<Float>){
             auto [silhouette_result, sdf_d, silhouette_hit] = sample_silhouette(1, scene, sampler, ray_, si, 1.0f, 1.0f, active);
-            result[silhouette_hit] += (silhouette_result - detach(result)) * grad_weight(sdf_d);
+            result[silhouette_hit] += (silhouette_result - detach(result)) * reattach_grad(sdf_d);
         }
 
         return { result, valid_ray };
@@ -140,8 +86,6 @@ public:
         Ray3f ray = ray_;
         SurfaceInteraction3f si = si_;
         Spectrum result(0.f);
-        Spectrum throughput_prev = throughput;
-        Float eta_prev = eta;
         active &= si.is_valid();
 
         /* Russian roulette: try to keep path weights equal to one,
@@ -195,7 +139,7 @@ public:
             if constexpr(sil_enabled){
                 const auto [sdf_d, silhouette_hit] = intersect_silhouette(ray_e, si_e, active_e);
                 const Spectrum emitter_val_detach = detach(emitter_val);
-                result[silhouette_hit] += mis * bsdf_val * (/* 0.0f */ - emitter_val_detach) * grad_weight(sdf_d);
+                result[silhouette_hit] += mis * bsdf_val * (/* 0.0f */ - emitter_val_detach) * reattach_grad(sdf_d);
             }
         }
 
@@ -237,8 +181,8 @@ public:
         masked(res_bsdf, active) += sample_rec<sil_enabled>(depth+1, scene, sampler, ray, si_bsdf, throughput, eta, active);
 
         if constexpr(sil_enabled){
-            auto [silhouette_result, sdf_d, silhouette_hit] = sample_silhouette(depth, scene, sampler, ray, si_bsdf, throughput_prev, eta_prev, active);
-            res_bsdf[silhouette_hit] += (silhouette_result - detach(res_bsdf)) * grad_weight(sdf_d);
+            auto [silhouette_result, sdf_d, silhouette_hit] = sample_silhouette(depth+1, scene, sampler, ray, si_bsdf, throughput, eta, active);
+            res_bsdf[silhouette_hit] += (silhouette_result - detach(res_bsdf)) * reattach_grad(sdf_d);
         }
 
         result += bsdf_val * res_bsdf;
@@ -259,10 +203,6 @@ public:
         Float delta = select(active_sil, tan_angle * si.sdf_t, 0.0f);
         delta = min(delta, sdf->max_silhouette_delta());
         active_sil &= si.sdf_d <= delta;
-
-        // Float delta = select(active_sil, sdf->max_silhouette_delta(), 0.0f);
-        // active_sil &= si.sdf_d <= delta;
-        // delta = si.sdf_d; // + 10.0f * math::RayEpsilon<ScalarFloat>;
 
         auto [hit, t, u1, u2] = sdf->_ray_intersect(ray, delta, nullptr, active_sil);
         masked(si.t, hit) = t;
@@ -308,11 +248,11 @@ public:
     MTS_DECLARE_CLASS()
 
 protected:
-    inline Float grad_weight(Float sdf_d) const{
+    inline Float reattach_grad(Float sdf_d) const{
         if constexpr(is_diff_array_v<Float>){
             Float d_detach = detach(sdf_d);
             return -(sdf_d - d_detach) / max(d_detach, 0.001f);
-            // return d_detach / sdf_d;
+            // return -(sdf_d) / max(d_detach, 0.001f); // DEBUG show silhouettes in primal radiance
         } else {
             return 0.0f;
         }

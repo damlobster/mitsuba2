@@ -50,14 +50,12 @@ public:
 
         si.p = ray(si.t);
 
-        auto dir_from_center = normalize(si.p - m_bbox.center());
-
         auto [d, n] = m_distance_field->eval_gradient(si, active);
         Normal3f n_detach = detach(n);
 
         d = (d - delta) / select(delta == 0.0f, max(dot(ray.d, -n_detach), 0.01f), 1.0f);
 
-        select(eq(delta, 0.0f), n, n_detach);
+        n = select(eq(delta, 0.0f), n, n_detach);
 
         si.p[active] = fmadd(si.t + d, ray.d, ray.o);
         si.n[active] = n;
@@ -76,6 +74,7 @@ public:
         masked(si.shape, active) = this;
         masked(si.prim_index, active) = 0;
 
+        auto dir_from_center = normalize((Point3f) detach(si.p) - m_bbox.center());
         Float theta   = unit_angle_z(dir_from_center),
               phi     = atan2(dir_from_center.y(), dir_from_center.x());
         masked(phi, phi < 0.f) += 2.f * math::Pi<Float>;
