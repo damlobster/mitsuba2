@@ -101,6 +101,7 @@ MTS_VARIANT Scene<Float, Spectrum>::Scene(const Properties &props) {
         emitter->set_scene(this);
 
     m_shapes_grad_enabled = false;
+    parameters_changed();
 }
 
 MTS_VARIANT Scene<Float, Spectrum>::~Scene() {
