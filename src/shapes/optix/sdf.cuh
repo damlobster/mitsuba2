@@ -287,21 +287,25 @@ extern "C" __global__ void __intersection__sdf() {
 extern "C" __global__ void __closesthit__sdf() {
     unsigned int launch_index = calculate_launch_index();
 
-    if (params.out_hit != nullptr) {
+    if (params.is_ray_test()) {
         params.out_hit[launch_index] = true;
     } else {
         const OptixHitGroupData *sbt_data = (OptixHitGroupData *) optixGetSbtDataPointer();
         OptixSdfData *sdf = (OptixSdfData *)sbt_data->data;
 
-        /* Compute and store information describing the intersection. This is
-           very similar to Sphere::fill_surface_interaction() */
+        // Ray in instance-space
+        Ray3f ray = get_ray();
 
-        Vector3f ray_o = make_vector3f(optixGetWorldRayOrigin());
-        Vector3f ray_d = make_vector3f(optixGetWorldRayDirection());
-        float t = optixGetRayTmax();
+        // Early return for ray_intersect_preliminary call
+        if (params.is_ray_intersect_preliminary()) {
+            write_output_pi_params(params, launch_index,
+                                   sbt_data->shape_ptr, 0,
+                                   Vector2f(), ray.maxt);
+            return;
+        }
+
         Vector3i res = sdf->resolution;
-
-        Vector3f p = fmaf(t, ray_d, ray_o);
+        Vector3f p = ray(ray.maxt);
         Vector3f local_p = sdf->to_object.transform_point(p);
 
         // float eps = 0.005f; // used for finite difference normal estimation
@@ -331,7 +335,7 @@ extern "C" __global__ void __closesthit__sdf() {
 
         Vector3f ng = ns;
         write_output_si_params(params, launch_index, sbt_data->shape_ptr,
-                              0, p, uv, ns, ng, dp_du, dp_dv, dn_du, dn_dv, t);
+                              0, p, uv, ns, ng, dp_du, dp_dv, dn_du, dn_dv, ray.maxt);
 
     }
 }
