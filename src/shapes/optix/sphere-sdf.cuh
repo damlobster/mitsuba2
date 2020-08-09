@@ -61,11 +61,13 @@ extern "C" __global__ void __closesthit__spheresdf() {
         Vector2f uv = Vector2f(0.f, 0.f);
         Vector3f dp_du = Vector3f(0.f, 0.f, 0.f);
         Vector3f dp_dv = Vector3f(0.f, 0.f, 0.f);
+        Vector3f dn_du = Vector3f(0.f, 0.f, 0.f);
+        Vector3f dn_dv = Vector3f(0.f, 0.f, 0.f);
         Vector3f ng = ns;
-        write_output_params(params, launch_index,
-                            sbt_data->shape_ptr,
-                            optixGetPrimitiveIndex(),
-                            p, uv, ns, ng, dp_du, dp_dv, t);
+        write_output_si_params(params, launch_index, sbt_data->shape_ptr,
+                              0, p, uv, ns, ng, dp_du, dp_dv, dn_du, dn_dv, t);
     }
+
+
 }
 #endif

@@ -16,9 +16,9 @@ struct OptixSdfData {
 #ifdef __CUDACC__
 
 __device__ bool
-intersect_aabb(const Vector3f &ray_o, 
-               const Vector3f &ray_d, 
-               float &mint, 
+intersect_aabb(const Vector3f &ray_o,
+               const Vector3f &ray_d,
+               float &mint,
                float &maxt) {
 
     /* First, ensure that the ray either has a nonzero slope on each axis,
@@ -51,7 +51,7 @@ __device__ float eval_sdf(const Vector3f &p, const float *sdf, const Vector3i &r
     pi = max(Vector3i(0,0,0), min(pi, res - 1));
 
     // If we are trying to evaluate a point outside the SDF: just assume we completely missed the shape for now
-    if ((pi.x() < 0) || (pi.y() < 0) || (pi.z() < 0) || 
+    if ((pi.x() < 0) || (pi.y() < 0) || (pi.z() < 0) ||
         (pi.x() + 1 >= res.x()) || (pi.y() + 1 >= res.y()) || (pi.z() + 1 >= res.z())) {
             return 1000.f;
     }
@@ -95,7 +95,7 @@ __forceinline__ __device__ Vector3f offsets(float coord, unsigned int res) {
     float norm_fac = 1.0f / 6.0f;
 
     float w0 = norm_fac * fmaf(a, fmaf(a, -a + 3, - 3), 1);
-    float w1 = norm_fac * fmaf(3 * a2, a - 2, 4);    
+    float w1 = norm_fac * fmaf(3 * a2, a - 2, 4);
     float w2 = norm_fac * fmaf(a, 3 * (-a2 + a + 1), 1);
     float w3 = norm_fac * a3;
 
@@ -120,7 +120,7 @@ __forceinline__ __device__ Vector3f offsets_deriv(float coord, unsigned int res)
 
     float a2 = a * a;
     float norm_fac = 1.0f / 6.0f;
-    
+
     // This is the gradient of the bspline kernel
     float w0 = norm_fac * (-3 * a2 +  6 * a - 3);
     float w1 = norm_fac * ( 9 * a2 - 12 * a    );
@@ -143,7 +143,7 @@ __forceinline__ __device__ Vector3f offsets_deriv(float coord, unsigned int res)
 __device__ float bspline_lookup(const Vector3f &p, const cudaTextureObject_t &texture, const Vector3i &res) {
 
     // Compute the various lookup parameters
-    // This code could be vectorized across dimensions 
+    // This code could be vectorized across dimensions
     Vector3f o_x = offsets(p.x(), res.x());
     Vector3f o_y = offsets(p.y(), res.y());
     Vector3f o_z = offsets(p.z(), res.z());
@@ -171,7 +171,7 @@ __device__ float bspline_lookup(const Vector3f &p, const cudaTextureObject_t &te
 __device__ Vector3f bspline_lookup_gradient(const Vector3f &p, const cudaTextureObject_t &texture, const Vector3i &res) {
 
     // Compute the various lookup parameters
-    // This code could be vectorized across dimensions 
+    // This code could be vectorized across dimensions
     Vector3f o_x = offsets(p.x(), res.x());
     Vector3f o_y = offsets(p.y(), res.y());
     Vector3f o_z = offsets(p.z(), res.z());
@@ -208,7 +208,7 @@ __device__ Vector3f bspline_lookup_gradient(const Vector3f &p, const cudaTexture
     float gz_tex111 = tex3D<float>(texture, o_x.y(), o_y.y(), grad_o_z.y());
 
     // Interpolate all these results using the precomputed weights
-    Vector3f grad; 
+    Vector3f grad;
     {
         float tex00 = lerp(gx_tex001, gx_tex000, o_z.z());
         float tex01 = lerp(gx_tex011, gx_tex010, o_z.z());
@@ -257,7 +257,7 @@ extern "C" __global__ void __intersection__sdf() {
     float aabb_mint, aabb_maxt;
     bool intersects = intersect_aabb(ray_o, ray_d, aabb_mint, aabb_maxt);
     if (!intersects)
-        return; // TODO: This should actually never happen, right? 
+        return; // TODO: This should actually never happen, right?
 
     Vector3i res = sdf->resolution;
 
@@ -308,13 +308,13 @@ extern "C" __global__ void __closesthit__sdf() {
         // float v0 = bspline_lookup(local_p, sdf->sdf_texture, res);
         // float v0x = bspline_lookup(local_p + Vector3f(eps, 0, 0), sdf->sdf_texture, res);
         // float v0y = bspline_lookup(local_p + Vector3f(0, eps, 0), sdf->sdf_texture, res);
-        // float v0z = bspline_lookup(local_p + Vector3f(0, 0, eps), sdf->sdf_texture, res);  
+        // float v0z = bspline_lookup(local_p + Vector3f(0, 0, eps), sdf->sdf_texture, res);
 
         // // float v0 = eval_sdf(local_p, sdf->sdf_data, res);
         // // float v0x = eval_sdf(local_p + Vector3f(eps, 0, 0), sdf->sdf_data, res);
         // // float v0y = eval_sdf(local_p + Vector3f(0, eps, 0), sdf->sdf_data, res);
-        // // float v0z = eval_sdf(local_p + Vector3f(0, 0, eps), sdf->sdf_data, res);  
-        
+        // // float v0z = eval_sdf(local_p + Vector3f(0, 0, eps), sdf->sdf_data, res);
+
         // float v0 = tex3D<float>(sdf->sdf_texture, local_p.x(), local_p.y(), local_p.z());
         // float v0x = tex3D<float>(sdf->sdf_texture, local_p.x() + eps, local_p.y(), local_p.z());
         // float v0y = tex3D<float>(sdf->sdf_texture, local_p.x(), local_p.y() + eps, local_p.z());
@@ -326,11 +326,13 @@ extern "C" __global__ void __closesthit__sdf() {
         Vector2f uv = Vector2f(0.f, 0.f);
         Vector3f dp_du = Vector3f(0.f, 0.f, 0.f);
         Vector3f dp_dv = Vector3f(0.f, 0.f, 0.f);
+        Vector3f dn_du = Vector3f(0.f, 0.f, 0.f);
+        Vector3f dn_dv = Vector3f(0.f, 0.f, 0.f);
+
         Vector3f ng = ns;
-        write_output_params(params, launch_index,
-                            sbt_data->shape_ptr,
-                            optixGetPrimitiveIndex(),
-                            p, uv, ns, ng, dp_du, dp_dv, t);
+        write_output_si_params(params, launch_index, sbt_data->shape_ptr,
+                              0, p, uv, ns, ng, dp_du, dp_dv, dn_du, dn_dv, t);
+
     }
 }
 #endif
