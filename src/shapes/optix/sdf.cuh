@@ -325,11 +325,15 @@ extern "C" __global__ void __closesthit__sdf() {
         // float v0z = tex3D<float>(sdf->sdf_texture, local_p.x(), local_p.y(), local_p.z() + eps);
         // Vector3f grad(v0x - v0, v0y - v0, v0z - v0);
         Vector3f grad = bspline_lookup_gradient(local_p, sdf->sdf_texture, res);
-        Vector3f ns = normalize(grad);
+        Vector3f ns = -normalize(grad);
 
         Vector2f uv = Vector2f(0.f, 0.f);
-        Vector3f dp_du = Vector3f(0.f, 0.f, 0.f);
-        Vector3f dp_dv = Vector3f(0.f, 0.f, 0.f);
+
+        // Initialize the dp_du and dp_dv gradients to a tangent frame
+        // This is used in scene_optix.inl to initialize the shading frame
+        Vector3f dp_du, dp_dv;
+        coordinate_system(ns, dp_du, dp_dv);
+
         Vector3f dn_du = Vector3f(0.f, 0.f, 0.f);
         Vector3f dn_dv = Vector3f(0.f, 0.f, 0.f);
 

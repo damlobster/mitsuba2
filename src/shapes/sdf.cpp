@@ -223,7 +223,7 @@ public:
     //! @{ \name Ray tracing routines
     // =============================================================
 
-    PreliminaryIntersection3f ray_intersect_preliminary(const Ray3f &ray,
+    PreliminaryIntersection3f ray_intersect_preliminary(const Ray3f & /* ray */,
                                                         Mask active) const override {
         MTS_MASK_ARGUMENT(active);
         NotImplementedError("ray_intersect_preliminary");
@@ -251,7 +251,7 @@ public:
         // Recompute ray intersection to get differentiable t
         if (differentiable && !has_flag(flags, HitComputeFlags::NonDifferentiable)) {
             auto [sdf_value, sdf_grad] = eval_sdf_and_gradient(ray(pi.t), active);
-            si.n = normalize(sdf_grad); // Normalize differentiable normal just in case of numerical issues
+            si.n = -normalize(sdf_grad); // Normalize differentiable normal just in case of numerical issues
             si.sh_frame = Frame3f(si.n); // Build a new coordinate frame around n
 
             // Compute t gradient: subtract detached SDF value to disable term in forward mode
@@ -259,6 +259,9 @@ public:
             Float t = Float(detach(pi.t)) + (t_grad_term - Float(detach(t_grad_term)));
             si.t = select(active, t, math::Infinity<Float>);
             si.p = ray(si.t);
+            // These tangent vectors are then used later to potentially re-initialize the sh frame
+            si.dp_du = si.sh_frame.s;
+            si.dp_dv = si.sh_frame.t;
         }
         return si;
     }
