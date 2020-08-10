@@ -298,37 +298,41 @@ public:
             if (!m_sdf)
                 Log(Error, "SDF Not initialized");
 
-            const auto &sdf_data = m_sdf->data();
-            const float * raw_sdf_data = sdf_data.data();
+            const float *raw_sdf_data = m_sdf->data().data();
 
-
-            cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
             // Create 3D array and copy data to it:
-            cudaArray *d_cuArr;
-            cudaMalloc3DArray(&d_cuArr, &channelDesc, make_cudaExtent(res.x(), res.y(), res.z()), 0);
-            cudaMemcpy3DParms copyParams = {0};
+            if (!m_cuArr) {
+                cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
+                cudaMalloc3DArray(&m_cuArr, &channelDesc, make_cudaExtent(res.x(), res.y(), res.z()), 0);
+            }
+
+            // Copy the actual texture data to the GPU
+            cudaMemcpy3DParms copyParams;
+            memset(&copyParams, 0, sizeof(cudaMemcpy3DParms));
             copyParams.srcPtr   = make_cudaPitchedPtr((void*) raw_sdf_data, res.x() * sizeof(float), res.y(), res.z());
-            copyParams.dstArray = d_cuArr;
+            copyParams.dstArray = m_cuArr;
             copyParams.extent   = make_cudaExtent(res.x(), res.y(), res.z());
             copyParams.kind     = cudaMemcpyDeviceToDevice;
             cudaMemcpy3D(&copyParams);
 
-            // Setup texture sampler object
-            cudaResourceDesc    texRes;
-            memset(&texRes, 0, sizeof(cudaResourceDesc));
-            texRes.resType = cudaResourceTypeArray;
-            texRes.res.array.array  = d_cuArr;
-            cudaTextureDesc     texDescr;
-            memset(&texDescr, 0, sizeof(cudaTextureDesc));
-            texDescr.normalizedCoords = true;
-            texDescr.filterMode = cudaFilterModeLinear;
-            texDescr.addressMode[0] = cudaAddressModeClamp;   // clamp
-            texDescr.addressMode[1] = cudaAddressModeClamp;
-            texDescr.addressMode[2] = cudaAddressModeClamp;
-            texDescr.readMode = cudaReadModeElementType;
-            m_cuda_sdf_tex = 0;
-            cudaCreateTextureObject(&m_cuda_sdf_tex, &texRes, &texDescr, NULL);
-
+            // Setup texture sampler object:
+            // This object only has to be created once: Between kernel launches, the texture cache is flushed and
+            // we can savely update the underlying cuda 3D array
+            if (!m_cuda_sdf_tex) {
+                cudaResourceDesc    texRes;
+                memset(&texRes, 0, sizeof(cudaResourceDesc));
+                texRes.resType = cudaResourceTypeArray;
+                texRes.res.array.array  = m_cuArr;
+                cudaTextureDesc     texDescr;
+                memset(&texDescr, 0, sizeof(cudaTextureDesc));
+                texDescr.normalizedCoords = true;
+                texDescr.filterMode = cudaFilterModeLinear;
+                texDescr.addressMode[0] = cudaAddressModeClamp;   // clamp
+                texDescr.addressMode[1] = cudaAddressModeClamp;
+                texDescr.addressMode[2] = cudaAddressModeClamp;
+                texDescr.readMode = cudaReadModeElementType;
+                cudaCreateTextureObject(&m_cuda_sdf_tex, &texRes, &texDescr, NULL);
+            }
 
             OptixSdfData data = { bbox(),
                                   m_to_world,
@@ -341,6 +345,13 @@ public:
     }
 #endif
 
+    void traverse(TraversalCallback *callback) override {
+        callback->put_object("sdf", m_sdf.get());
+        Base::traverse(callback);
+    }
+
+
+
     std::string to_string() const override {
         std::ostringstream oss;
         oss << "Sdf[" << std::endl
@@ -352,7 +363,9 @@ public:
     MTS_DECLARE_CLASS()
 private:
     ref<Volume> m_sdf;
-    cudaTextureObject_t m_cuda_sdf_tex;
+    cudaTextureObject_t m_cuda_sdf_tex = 0;
+    cudaArray *m_cuArr = nullptr;
+
 
 };
 
