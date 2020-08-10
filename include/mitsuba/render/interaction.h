@@ -130,6 +130,10 @@ struct SurfaceInteraction : Interaction<Float_, Spectrum_> {
     /// Stores a pointer to the parent instance (if applicable)
     ShapePtr instance = nullptr;
 
+    /// SDF: Extra float values
+    Point2f extra;
+
+
     //! @}
     // =============================================================
 
@@ -357,7 +361,7 @@ struct SurfaceInteraction : Interaction<Float_, Spectrum_> {
     ENOKI_DERIVED_STRUCT(SurfaceInteraction, Base,
         ENOKI_BASE_FIELDS(t, time, wavelengths, p),
         ENOKI_DERIVED_FIELDS(shape, uv, n, sh_frame, dp_du, dp_dv, dn_du, dn_dv,
-                             duv_dx, duv_dy, wi, prim_index, instance)
+                             duv_dx, duv_dy, wi, prim_index, instance, extra)
     )
 };
 
@@ -546,6 +550,9 @@ struct PreliminaryIntersection {
     /// Stores a pointer to the parent instance (if applicable)
     ShapePtr instance = nullptr;
 
+    /// SDF: Extra floating point info
+    Point2f extra;
+
     //! @}
     // =============================================================
 
@@ -576,6 +583,9 @@ struct PreliminaryIntersection {
         active &= si.is_valid();
         si.t = select(active, si.t, math::Infinity<Float>);
         si.prim_index  = prim_index;
+        //  SDF: Copy over primitive UV even if there was no intersection
+        masked(si.extra, !active) = extra;
+
 
         // Set shape pointer if not already set by compute_surface_interaction()
         si.shape = select(eq(si.shape, nullptr), shape, si.shape);
@@ -598,7 +608,7 @@ struct PreliminaryIntersection {
     //! @}
     // =============================================================
 
-    ENOKI_STRUCT(PreliminaryIntersection, t, prim_uv, prim_index, shape_index, shape, instance);
+    ENOKI_STRUCT(PreliminaryIntersection, t, prim_uv, prim_index, shape_index, shape, instance, extra);
 };
 
 // -----------------------------------------------------------------------------
@@ -697,12 +707,12 @@ ENOKI_STRUCT_SUPPORT(mitsuba::Interaction, t, time, wavelengths, p)
 
 ENOKI_STRUCT_SUPPORT(mitsuba::SurfaceInteraction, t, time, wavelengths, p,
                      shape, uv, n, sh_frame, dp_du, dp_dv, dn_du, dn_dv, duv_dx, duv_dy, wi,
-                     prim_index, instance)
+                     prim_index, instance, extra)
 
 ENOKI_STRUCT_SUPPORT(mitsuba::MediumInteraction, t, time, wavelengths, p,
                      medium, sh_frame, wi, sigma_s, sigma_n, sigma_t, combined_extinction, mint)
 
-ENOKI_STRUCT_SUPPORT(mitsuba::PreliminaryIntersection, t, prim_uv, prim_index, shape_index, shape, instance)
+ENOKI_STRUCT_SUPPORT(mitsuba::PreliminaryIntersection, t, prim_uv, prim_index, shape_index, shape, instance, extra)
 
 //! @}
 // -----------------------------------------------------------------------

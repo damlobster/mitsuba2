@@ -543,6 +543,8 @@ Mesh<Float, Spectrum>::compute_surface_interaction(const Ray3f &ray,
         si.sh_frame.n = si.n;
     }
 
+    // SDF Copy over extra info
+    si.extra = pi.extra;
     return si;
 }
 

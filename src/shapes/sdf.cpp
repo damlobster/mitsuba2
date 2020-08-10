@@ -262,6 +262,7 @@ public:
             // These tangent vectors are then used later to potentially re-initialize the sh frame
             si.dp_du = si.sh_frame.s;
             si.dp_dv = si.sh_frame.t;
+            si.extra = pi.extra;
         }
         return si;
     }

@@ -37,9 +37,11 @@ extern "C" __global__ void __closesthit__mesh() {
         float2 float2_uv = optixGetTriangleBarycentrics();
         Vector2f prim_uv = Vector2f(float2_uv.x, float2_uv.y);
 
+        Vector2f extra(__int_as_float(optixGetPayload_0()), __int_as_float(optixGetPayload_1()));
+
         // Early return for ray_intersect_preliminary call
         if (params.is_ray_intersect_preliminary()) {
-            write_output_pi_params(params, launch_index, sbt_data->shape_ptr, prim_index, prim_uv, t);
+            write_output_pi_params(params, launch_index, sbt_data->shape_ptr, prim_index, prim_uv, t, extra);
             return;
         }
 

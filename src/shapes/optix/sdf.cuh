@@ -266,21 +266,41 @@ extern "C" __global__ void __intersection__sdf() {
     t = max(t, mint);
     t += 1e-5; // Small ray epsilon to always query position inside the grid
 
+    float epsilon = 0.01f;
+
+    float silhouette_t = 1000.f, silhouette_dist = 1000.f;
+    // float silhouette_t = CUDART_INF_F, silhouette_dist = CUDART_INF_F;
     // while (true) {
+    float prev_dist = CUDART_INF_F;
     for (int i = 0; i < 4096; ++i) {
         Vector3f p = fmaf(t, ray_d, ray_o);
         // float min_dist1 = eval_sdf(p, sdf->sdf_data, res);
         // float min_dist = tex3D<float>(sdf->sdf_texture, p.x(), p.y(), p.z());
         float min_dist = bspline_lookup(p, sdf->sdf_texture, res);
+
+        // Check if 1) the distance starts to increase
+        // 2) min_dist is smaller than epsilon
+        // 3) We found the smallest edge distance along the ray
+        if (prev_dist < min_dist && min_dist < epsilon && min_dist < silhouette_dist) {
+            silhouette_t = t;
+            silhouette_dist = min_dist;
+        }
+
         t += min_dist;
+        prev_dist = min_dist;
+
 
         if (t > maxt)
-            return;
+            break;
         if (min_dist < 1e-6f) {
             optixReportIntersection(t, OPTIX_HIT_KIND_TRIANGLE_FRONT_FACE);
-            return;
+            break;
         }
     }
+
+    // Output edge sampling information
+    optixSetPayload_0(__float_as_int(silhouette_t));
+    optixSetPayload_1(__float_as_int(silhouette_dist));
 }
 
 
@@ -295,14 +315,16 @@ extern "C" __global__ void __closesthit__sdf() {
 
         // Ray in instance-space
         Ray3f ray = get_ray();
-
+        Vector2f extra(__int_as_float(optixGetPayload_0()), __int_as_float(optixGetPayload_1()));
         // Early return for ray_intersect_preliminary call
         if (params.is_ray_intersect_preliminary()) {
             write_output_pi_params(params, launch_index,
                                    sbt_data->shape_ptr, 0,
-                                   Vector2f(), ray.maxt);
+                                   Vector2f(), ray.maxt, extra);
             return;
         }
+
+        // TODO: This code path wont write out extra info for now (not really needed?)
 
         Vector3i res = sdf->resolution;
         Vector3f p = ray(ray.maxt);

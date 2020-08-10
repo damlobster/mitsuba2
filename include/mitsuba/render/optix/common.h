@@ -51,7 +51,8 @@ struct OptixParams {
             *out_dng_du[3],
             *out_dng_dv[3],
             *out_dns_du[3],
-            *out_dns_dv[3];
+            *out_dns_dv[3],
+            *out_extra[2];
     unsigned long long *out_shape_ptr;
     unsigned int *out_prim_index;
     unsigned int *out_inst_index;
@@ -115,6 +116,33 @@ __device__ void write_output_pi_params(OptixParams &params,
 
     params.out_t[launch_index] = t;
 }
+
+
+__device__ void write_output_pi_params(OptixParams &params,
+                                       unsigned int launch_index,
+                                       unsigned long long shape_ptr,
+                                       unsigned int prim_index,
+                                       const Vector2f &prim_uv,
+                                       float t,
+                                       const Vector2f &extra) {
+    params.out_shape_ptr[launch_index]  = shape_ptr;
+    params.out_prim_index[launch_index] = prim_index;
+
+    // Instance index is initialized to 0 when there is no instancing in the scene
+    if (params.out_inst_index[launch_index] > 0) {
+        // Check whether the current instance ID is a valid instance index
+        unsigned int inst_index = optixGetInstanceId();
+        if (inst_index < params.out_inst_index[launch_index])
+            params.out_inst_index[launch_index] = inst_index;
+    }
+
+    params.out_prim_uv[0][launch_index] = prim_uv.x();
+    params.out_prim_uv[1][launch_index] = prim_uv.y();
+    params.out_extra[0][launch_index] = extra.x();
+    params.out_extra[1][launch_index] = extra.y();
+    params.out_t[launch_index] = t;
+}
+
 
 /// Write SurfaceInteraction fields to the data pointers stored in the OptixParams
 __device__ void write_output_si_params(OptixParams &params,

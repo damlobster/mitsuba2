@@ -404,6 +404,10 @@ Scene<Float, Spectrum>::ray_intersect_preliminary_gpu(const Ray3f &ray_, Mask ac
         bind_data(params.out_prim_uv, pi.prim_uv);
         bind_data(&params.out_prim_index, pi.prim_index);
         bind_data(&params.out_inst_index, instance_index);
+
+        // SDF extra data
+        bind_data(params.out_extra, pi.extra);
+
         params.out_shape_ptr = (unsigned long long*)pi.shape.data();
         params.handle = s.ias_handle;
 
