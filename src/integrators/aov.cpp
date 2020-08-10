@@ -71,6 +71,7 @@ public:
         Depth,
         Position,
         UV,
+        Extra,
         GeometricNormal,
         ShadingNormal,
         dPdU,
@@ -99,6 +100,10 @@ public:
                 m_aov_names.push_back(item[0] + ".Z");
             } else if (item[1] == "uv") {
                 m_aov_types.push_back(Type::UV);
+                m_aov_names.push_back(item[0] + ".U");
+                m_aov_names.push_back(item[0] + ".V");
+            } else if (item[1] == "extra") {
+                m_aov_types.push_back(Type::Extra);
                 m_aov_names.push_back(item[0] + ".U");
                 m_aov_names.push_back(item[0] + ".V");
             } else if (item[1] == "geo_normal") {
@@ -164,7 +169,10 @@ public:
         std::pair<Spectrum, Mask> result { 0.f, false };
 
         SurfaceInteraction3f si = scene->ray_intersect(ray, active);
+
+        Vector2f extra = si.extra; // Preserve extra info even for invalid ray intersections
         si[!si.is_valid()] = zero<SurfaceInteraction3f>();
+        si.extra = extra;
         size_t ctr = 0;
 
         for (size_t i = 0; i < m_aov_types.size(); ++i) {
@@ -182,6 +190,11 @@ public:
                 case Type::UV:
                     *aovs++ = si.uv.x();
                     *aovs++ = si.uv.y();
+                    break;
+
+                case Type::Extra:
+                    *aovs++ = si.extra.x();
+                    *aovs++ = si.extra.y();
                     break;
 
                 case Type::GeometricNormal:
