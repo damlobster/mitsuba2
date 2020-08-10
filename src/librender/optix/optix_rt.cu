@@ -56,11 +56,11 @@ extern "C" __global__ void __miss__ms() {
     } else {
         params.out_shape_ptr[launch_index] = 0;
         params.out_t[launch_index] = CUDART_INF_F;
-    }
 
-    // SDF: Copy payload to UV channel regardless of whether we hit something or not
-    params.out_extra[0][launch_index] = __int_as_float(optixGetPayload_0());
-    params.out_extra[1][launch_index] = __int_as_float(optixGetPayload_1());
+        // SDF: Copy payload to UV channel regardless of whether we hit something or not
+        params.out_extra[0][launch_index] = __int_as_float(optixGetPayload_0());
+        params.out_extra[1][launch_index] = __int_as_float(optixGetPayload_1());
+    }
 }
 
 struct OptixException {

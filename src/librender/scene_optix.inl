@@ -472,6 +472,8 @@ Scene<Float, Spectrum>::ray_intersect_gpu(const Ray3f &ray_, HitComputeFlags fla
             si.dn_dv = empty<Vector3f>(ray_count);
         }
 
+        si.extra = empty<Point2f>(ray_count);
+
         // DEBUG mode: Explicitly instantiate `si` with NaN values.
         // As the integrator should only deal with the lanes of `si` for which
         // `si.is_valid()==true`, this makes it easier to catch bugs in the
@@ -525,6 +527,9 @@ Scene<Float, Spectrum>::ray_intersect_gpu(const Ray3f &ray_, HitComputeFlags fla
         }
         bind_data(&params.out_prim_index, si.prim_index);
         bind_data(&params.out_inst_index, instance_index);
+
+        bind_data(params.out_extra, si.extra);
+
         params.out_shape_ptr = (unsigned long long*)si.shape.data();
         params.handle = s.ias_handle;
 
