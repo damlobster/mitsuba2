@@ -8,7 +8,7 @@
 #include "mesh.cuh"
 #include "rectangle.cuh"
 #include "sphere.cuh"
-#include "sdf.cuh"
+#include "sdfplugin.cuh"
 #include "sphere-sdf.cuh"
 #else
 
@@ -19,7 +19,7 @@
 NAMESPACE_BEGIN(mitsuba)
 /// List of the custom shapes supported by OptiX
 static std::string custom_optix_shapes[] = {
-    "Disk", "Rectangle", "Sphere", "Cylinder", "Sdf", "SphereSdf",
+    "Disk", "Rectangle", "Sphere", "Cylinder", "SdfPlugin", "SphereSdf",
 };
 static constexpr size_t custom_optix_shapes_count = std::size(custom_optix_shapes);
 

@@ -51,6 +51,7 @@ add_library(mitsuba-render-obj OBJECT
   kdtree.cpp       ${INC_DIR}/kdtree.h
   medium.cpp       ${INC_DIR}/medium.h
   mesh.cpp         ${INC_DIR}/mesh.h
+  sdf.cpp          ${INC_DIR}/sdf.h
   microfacet.cpp   ${INC_DIR}/microfacet.h
                    ${INC_DIR}/mueller.h
   phase.cpp        ${INC_DIR}/phase.h
